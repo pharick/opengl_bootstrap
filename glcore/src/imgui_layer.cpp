@@ -1,12 +1,8 @@
 #include <glcore/imgui_layer.hpp>
 
-#include <glcore/gl.hpp> // GLEW first
-// clang-format off
-#include <GLFW/glfw3.h>
-// clang-format on
-
-#include <glcore/log.hpp>
-
+// No GL or GLFW headers here on purpose: this file makes no GL calls of its
+// own, and imgui_impl_glfw.h forward-declares GLFWwindow, so Window::handle()
+// can be passed straight through.
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>

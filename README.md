@@ -1,7 +1,7 @@
 # opengl_bootstrap
 
 A modern C++23 scaffold for working through
-[*Learning Modern 3D Graphics Programming*](https://paroj.github.io/gltut/) (gltut).
+[_Learning Modern 3D Graphics Programming_](https://paroj.github.io/gltut/) (gltut).
 
 Each chapter is its own small executable; everything reusable — window, GL object wrappers, shaders,
 camera, meshes, textures — lives in a shared `glcore` library. Every GL resource is RAII-owned, no
@@ -27,11 +27,11 @@ cmake --build --preset dev
 ./build/dev/bin/tut01_hello_triangle
 ```
 
-| Preset | What it gives you |
-| --- | --- |
-| `dev` | Debug, `-Werror`, clang-tidy as errors, `GLC_CHECK` active, uniform-binding assertions |
-| `asan` | `dev` plus AddressSanitizer and UndefinedBehaviorSanitizer |
-| `release` | RelWithDebInfo, no clang-tidy, error checks compiled out |
+| Preset    | What it gives you                                                                      |
+| --------- | -------------------------------------------------------------------------------------- |
+| `dev`     | Debug, `-Werror`, clang-tidy as errors, `GLC_CHECK` active, uniform-binding assertions |
+| `asan`    | `dev` plus AddressSanitizer and UndefinedBehaviorSanitizer                             |
+| `release` | RelWithDebInfo, no clang-tidy, error checks compiled out                               |
 
 Configuring also symlinks `compile_commands.json` into the project root, so clangd works with no
 extra setup. It repoints at whichever preset you configured last — run `cmake --preset dev` if your
@@ -56,7 +56,7 @@ cmake --build --preset dev --target format-check   # fail if anything is unforma
 cmake --build --preset dev --target tidy           # clang-tidy over everything at once
 ```
 
-The `dev` preset also runs clang-tidy *during* compilation with `--warnings-as-errors=*`, so a new
+The `dev` preset also runs clang-tidy _during_ compilation with `--warnings-as-errors=*`, so a new
 finding fails the build. That costs roughly 2x wall-clock on a clean build (11.4s vs 6.0s here);
 turn it off with `-DGLCORE_TIDY=OFF` if it gets in the way while experimenting. `third_party` is
 never formatted or linted.
@@ -77,6 +77,23 @@ The conventions, in brief:
 
 Homebrew keeps `clang-format`/`clang-tidy` out of the default `PATH`; the CMake targets look in the
 LLVM keg too, so `brew install llvm` is all that is needed.
+
+Everything that is not C++ is covered too:
+
+| Files                                     | Handled by                                                              |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| `.glsl` / `.vert` / `.frag`               | clang-format, via the same `format` target — it treats them as C++      |
+| `.md`, `.json`                            | Prettier, pinned to 100 columns by `.prettierrc` to match the C++ limit |
+| `CMakeLists.txt`, `.cmake`                | 4-space, declared in `.editorconfig` (no formatter — kept by hand)      |
+| `.clang-format`, `.clang-tidy`, `.clangd` | deliberately in `.prettierignore`                                       |
+| everything                                | `.editorconfig`: UTF-8, LF, final newline, no trailing whitespace       |
+
+`.editorconfig` matters most for the C++ itself: `.clang-format` indents with tabs, and an editor
+inserting spaces on new lines would fight it on every keystroke.
+
+The clang tooling configs are YAML but are excluded from Prettier on purpose — `.clang-tidy`'s
+`Checks: >` block scalar is load-bearing, and Prettier does rewrite these files (it turns
+`WarningsAsErrors: ''` into `""`).
 
 ## Adding a chapter
 
@@ -128,11 +145,11 @@ int main() { return glc::runApp<MyTutorial>(); }
 
 ## Included examples
 
-| Tutorial | Shows |
-| --- | --- |
-| `tut01_hello_triangle` | Buffer, VAO, program, hot-reload |
-| `tut02_cube_and_camera` | XML mesh, orbit camera, matrix stack, ImGui panel |
-| `tut03_textured_quad` | Image loading, samplers, mipmaps, anisotropy, linear vs sRGB |
+| Tutorial                | Shows                                                        |
+| ----------------------- | ------------------------------------------------------------ |
+| `tut01_hello_triangle`  | Buffer, VAO, program, hot-reload                             |
+| `tut02_cube_and_camera` | XML mesh, orbit camera, matrix stack, ImGui panel            |
+| `tut03_textured_quad`   | Image loading, samplers, mipmaps, anisotropy, linear vs sRGB |
 
 ## What glcore gives you
 

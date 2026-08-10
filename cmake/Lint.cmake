@@ -18,15 +18,25 @@ file(GLOB_RECURSE GLCORE_LINT_SOURCES CONFIGURE_DEPENDS
      "${CMAKE_SOURCE_DIR}/tests/*.cpp"
      "${CMAKE_SOURCE_DIR}/tutorials/*.cpp")
 
+# clang-format treats unknown extensions as C++, which is close enough for GLSL
+# and keeps the shaders on the same tabs-indent / spaces-align rules as the C++.
+# These are formatted but never passed to clang-tidy.
+file(GLOB_RECURSE GLCORE_SHADER_SOURCES CONFIGURE_DEPENDS
+     "${CMAKE_SOURCE_DIR}/assets/*.glsl"
+     "${CMAKE_SOURCE_DIR}/tutorials/*.glsl"
+     "${CMAKE_SOURCE_DIR}/tutorials/*.vert"
+     "${CMAKE_SOURCE_DIR}/tutorials/*.frag")
+
 if(CLANG_FORMAT_EXE)
     add_custom_target(format
-        COMMAND ${CLANG_FORMAT_EXE} -i ${GLCORE_LINT_SOURCES}
-        COMMENT "Formatting sources with ${CLANG_FORMAT_EXE}"
+        COMMAND ${CLANG_FORMAT_EXE} -i ${GLCORE_LINT_SOURCES} ${GLCORE_SHADER_SOURCES}
+        COMMENT "Formatting C++ and GLSL with ${CLANG_FORMAT_EXE}"
         VERBATIM)
 
     add_custom_target(format-check
-        COMMAND ${CLANG_FORMAT_EXE} --dry-run -Werror ${GLCORE_LINT_SOURCES}
-        COMMENT "Checking formatting"
+        COMMAND ${CLANG_FORMAT_EXE} --dry-run -Werror
+                ${GLCORE_LINT_SOURCES} ${GLCORE_SHADER_SOURCES}
+        COMMENT "Checking C++ and GLSL formatting"
         VERBATIM)
 else()
     message(STATUS "clang-format not found -- 'format' target unavailable")

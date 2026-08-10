@@ -1,0 +1,22 @@
+# Editor-side configuration for clangd.
+#
+# clangd's IncludeCleaner has two halves, and this project takes them
+# differently on purpose:
+#
+#   UnusedIncludes  Strict  -- "you include <span> but never use it". A handful
+#                              of real, actionable findings. Kept on.
+#
+#   MissingIncludes None    -- "you use std::size_t, so include <cstddef>
+#                              directly even though <array> already provides
+#                              it". That direction produced ~280 findings when
+#                              it was tried through clang-tidy's
+#                              misc-include-cleaner, nearly all noise, which is
+#                              why that check is disabled in .clang-tidy too.
+#                              Off here so the two tools agree.
+#
+# An include that only exists for one platform's #ifdef branch will still be
+# reported as unused on the others; mark those `// IWYU pragma: keep`, as
+# paths.cpp does for <string>.
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: None

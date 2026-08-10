@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!--
   A unit cube in gltut's mesh format, centered on the origin.
 
@@ -33,7 +33,7 @@
 	</attribute>
 
 	<vao name="position-only">
-		<source attrib="0"/>
+		<source attrib="0" />
 	</vao>
 
 	<indices cmd="triangles" type="ushort">

@@ -3,7 +3,6 @@
 #include <glcore/handle.hpp>
 
 #include <cstddef>
-#include <span>
 
 // Uniform buffer objects, used from Tutorial 9 (Lights On) onward.
 //

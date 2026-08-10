@@ -5,7 +5,7 @@
 #include <glm/vec2.hpp>
 
 #include <array>
-#include <cstdint>
+#include <cstddef>
 
 // Per-frame keyboard and mouse state.
 //

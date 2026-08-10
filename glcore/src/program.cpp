@@ -2,7 +2,6 @@
 
 #include <glcore/gl_check.hpp>
 #include <glcore/glsl_source.hpp>
-#include <glcore/log.hpp>
 
 #include <glm/gtc/type_ptr.hpp>
 

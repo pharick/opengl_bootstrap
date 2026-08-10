@@ -6,12 +6,14 @@
 #include <cstdint>
 #include <format>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #elifdef _WIN32
+// std::wstring, for GetModuleFileNameW's result. The pragma stops
+// include-cleaner flagging it on platforms where this branch is inactive.
+#include <string> // IWYU pragma: keep
 #include <windows.h>
 #endif
 
