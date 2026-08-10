@@ -1,0 +1,75 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# Indentation
+# Tabs indent, spaces align. Using tabs for *alignment* too (UseTab: Always)
+# makes wrapped arguments and trailing comments line up only when the reader's
+# tab width happens to be 4; ForIndentation keeps the tabs but leaves alignment
+# to spaces, so it reads correctly at any tab width.
+IndentWidth: 4
+TabWidth: 4
+UseTab: ForIndentation
+IndentCaseLabels: true
+NamespaceIndentation: None
+
+# Braces
+# BraceWrapping is only consulted when BreakBeforeBraces is Custom, so this
+# spells out "attach everything" explicitly in order to also set
+# SplitEmpty*: false -- which keeps `virtual void onInit() {}` on one line even
+# though short function bodies are otherwise always expanded.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+# Line breaks
+ColumnLimit: 100
+# Empty, not None: every real body gets its own lines, but the App hooks stay
+# readable as `virtual void onInit() {}` instead of sprawling over three lines.
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: true
+AlwaysBreakTemplateDeclarations: Yes
+
+# Spacing
+SpaceAfterTemplateKeyword: false
+SpaceBeforeParens: ControlStatements
+SpacesInAngles: false
+
+# Alignment
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: true
+AlignTrailingComments: true
+
+# Includes
+SortIncludes: true
+IncludeBlocks: Preserve
+
+# Pointers and References
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Other
+AccessModifierOffset: -4
+FixNamespaceComments: true
+ReflowComments: true

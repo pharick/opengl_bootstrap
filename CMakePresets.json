@@ -1,0 +1,56 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "dev",
+      "inherits": "base",
+      "displayName": "Dev (Debug, -Werror, clang-tidy, GL error checks on)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "GLCORE_WERROR": "ON",
+        "GLCORE_TIDY": "ON"
+      }
+    },
+    {
+      "name": "asan",
+      "inherits": "dev",
+      "displayName": "ASan + UBSan (Debug)",
+      "cacheVariables": {
+        "GLCORE_SANITIZE": "address,undefined"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "displayName": "Release (RelWithDebInfo, GL error checks compiled out)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "GLCORE_WERROR": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "asan", "configurePreset": "asan" },
+    { "name": "release", "configurePreset": "release" }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
