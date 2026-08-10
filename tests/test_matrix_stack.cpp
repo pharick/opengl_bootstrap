@@ -1,4 +1,5 @@
-#include <doctest.h>
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <glcore/matrix_stack.hpp>
 
@@ -71,18 +72,21 @@ TEST_CASE("a child transform composes onto its parent") {
 		const glc::MatrixStack::Frame frame = stack.push();
 		stack.Translate(2.0F, 0.0F, 0.0F);
 		const glm::vec4 origin = stack.Top() * glm::vec4{0.0F, 0.0F, 0.0F, 1.0F};
-		CHECK(origin.x == doctest::Approx(3.0F));
+		CHECK(origin.x == Catch::Approx(3.0F));
 	}
 	const glm::vec4 origin = stack.Top() * glm::vec4{0.0F, 0.0F, 0.0F, 1.0F};
-	CHECK(origin.x == doctest::Approx(1.0F));
+	CHECK(origin.x == Catch::Approx(1.0F));
 }
 
 TEST_CASE("rotations are in degrees, matching the book") {
 	glc::MatrixStack stack;
 	stack.RotateZ(90.0F);
 	const glm::vec4 rotated = stack.Top() * glm::vec4{1.0F, 0.0F, 0.0F, 1.0F};
-	CHECK(rotated.x == doctest::Approx(0.0F).epsilon(1e-5));
-	CHECK(rotated.y == doctest::Approx(1.0F));
+	// margin, not epsilon: Catch2's epsilon is a *relative* tolerance, so against
+	// 0.0 it demands exact equality, and float sin/cos leaves ~-4e-8 here.
+	// doctest's Approx folded a +1.0 into its formula, which hid the distinction.
+	CHECK(rotated.x == Catch::Approx(0.0F).margin(1e-5));
+	CHECK(rotated.y == Catch::Approx(1.0F));
 }
 
 TEST_CASE("operator*= applies a matrix to the frame") {

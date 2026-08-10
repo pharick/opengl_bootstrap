@@ -10,13 +10,15 @@ raw `new`/`delete`, and shader edits show up live without restarting.
 ## Prerequisites
 
 ```sh
-brew install cmake ninja glfw glew glm tinyxml2
+brew install cmake ninja glfw glew glm tinyxml2 catch2
 ```
 
 `tinyxml2` is only needed for gltut's XML meshes (Tutorial 7 onward). Without it the project still
-configures and builds; the mesh loader and `tut02` are simply skipped.
+configures and builds; the mesh loader and `tut02` are simply skipped. `catch2` is only needed for
+the tests — pass `-DGLCORE_BUILD_TESTS=OFF` to skip them.
 
-Dear ImGui is a pinned git submodule; `stb_image` and `doctest` are vendored single headers.
+Dear ImGui is a pinned git submodule. `stb_image` is a vendored single header, because it has no
+formula worth using; everything else comes from Homebrew.
 
 ## Build and run
 
@@ -37,7 +39,9 @@ Configuring also symlinks `compile_commands.json` into the project root, so clan
 extra setup. It repoints at whichever preset you configured last — run `cmake --preset dev` if your
 editor starts showing release flags. The symlink is gitignored.
 
-Tests (the parts that need no GL context) run with `ctest --preset dev`.
+Tests (the parts that need no GL context) run with `ctest --preset dev`. Catch2's
+`catch_discover_tests` registers each `TEST_CASE` as its own CTest entry, so `ctest --preset dev -R
+matrix` runs just the matrix-stack cases and a failure names the case rather than the binary.
 
 Any tutorial can be run as a headless-ish smoke test by capping its frame count, which is how the
 GL resource lifetimes get exercised end to end under a sanitizer:

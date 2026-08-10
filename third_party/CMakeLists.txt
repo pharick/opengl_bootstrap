@@ -40,9 +40,5 @@ add_library(stb STATIC "${CMAKE_CURRENT_SOURCE_DIR}/stb/stb_image_impl.cpp")
 target_include_directories(stb SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/stb")
 add_library(third_party::stb ALIAS stb)
 
-# ---------------------------------------------------------------------------
-# doctest -- vendored single header, header-only
-# ---------------------------------------------------------------------------
-add_library(doctest INTERFACE)
-target_include_directories(doctest SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/doctest")
-add_library(third_party::doctest ALIAS doctest)
+# The test framework is Catch2, from Homebrew -- see tests/CMakeLists.txt.
+# Nothing vendored here for it.

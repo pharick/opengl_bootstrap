@@ -1,4 +1,4 @@
-#include <doctest.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include <glcore/glsl_source.hpp>
 
@@ -59,7 +59,7 @@ TEST_CASE("plain source keeps #version first") {
 TEST_CASE("a missing file is an error, not an exception") {
 	const auto result = glc::loadGlslSource("/definitely/not/here.vert");
 	REQUIRE_FALSE(result.has_value());
-	CHECK(result.error().find("cannot open") != std::string::npos);
+	CHECK(result.error().contains("cannot open"));
 }
 
 TEST_CASE("#include is expanded and the file is recorded") {
@@ -70,8 +70,8 @@ TEST_CASE("#include is expanded and the file is recorded") {
 
 	const auto result = glc::loadGlslSource(shader);
 	REQUIRE(result.has_value());
-	CHECK(result->text.find("float helper()") != std::string::npos);
-	CHECK(result->text.find("#include") == std::string::npos);
+	CHECK(result->text.contains("float helper()"));
+	CHECK_FALSE(result->text.contains("#include"));
 
 	// Both files are watched for hot-reload.
 	REQUIRE(result->files.size() == 2);
@@ -88,10 +88,10 @@ TEST_CASE("#line directives are emitted so driver errors stay decodable") {
 	const auto result = glc::loadGlslSource(shader);
 	REQUIRE(result.has_value());
 	// Root file is source string 0, the include is source string 1.
-	CHECK(result->text.find("#line 2 0") != std::string::npos);
-	CHECK(result->text.find("#line 1 1") != std::string::npos);
+	CHECK(result->text.contains("#line 2 0"));
+	CHECK(result->text.contains("#line 1 1"));
 	// After the include, numbering resumes in the root file at line 3.
-	CHECK(result->text.find("#line 3 0") != std::string::npos);
+	CHECK(result->text.contains("#line 3 0"));
 }
 
 TEST_CASE("an #include cycle is reported rather than looping forever") {
@@ -102,7 +102,7 @@ TEST_CASE("an #include cycle is reported rather than looping forever") {
 
 	const auto result = glc::loadGlslSource(shader);
 	REQUIRE_FALSE(result.has_value());
-	CHECK(result.error().find("cycle") != std::string::npos);
+	CHECK(result.error().contains("cycle"));
 }
 
 TEST_CASE("an unresolvable #include names what it looked for") {
@@ -111,7 +111,7 @@ TEST_CASE("an unresolvable #include names what it looked for") {
 
 	const auto result = glc::loadGlslSource(shader);
 	REQUIRE_FALSE(result.has_value());
-	CHECK(result.error().find("nope.glsl") != std::string::npos);
+	CHECK(result.error().contains("nope.glsl"));
 }
 
 TEST_CASE("the same header included twice keeps one source-string index") {
