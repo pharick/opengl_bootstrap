@@ -17,8 +17,8 @@ brew install cmake ninja glfw glew glm tinyxml2 catch2
 configures and builds; the mesh loader and `tut02` are simply skipped. `catch2` is only needed for
 the tests — pass `-DGLCORE_BUILD_TESTS=OFF` to skip them.
 
-Dear ImGui is a pinned git submodule. `stb_image` is a vendored single header, because it has no
-formula worth using; everything else comes from Homebrew.
+Dear ImGui and [gli](https://github.com/g-truc/gli) are pinned git submodules — neither has a
+formula worth using. Everything else comes from Homebrew.
 
 ## Build and run
 
@@ -89,6 +89,7 @@ Everything that is not C++ is covered too:
 | `.glsl` / `.vert` / `.frag`               | clang-format, via the same `format` target — it treats them as C++      |
 | `.md`, `.json`                            | Prettier, pinned to 100 columns by `.prettierrc` to match the C++ limit |
 | `CMakeLists.txt`, `.cmake`                | 4-space, declared in `.editorconfig` (no formatter — kept by hand)      |
+| `tools/*.py`                              | PEP 8 at 100 columns, declared in `.editorconfig` (kept by hand)        |
 | `.clang-format`, `.clang-tidy`, `.clangd` | deliberately in `.prettierignore`                                       |
 | everything                                | `.editorconfig`: UTF-8, LF, final newline, no trailing whitespace       |
 
@@ -149,11 +150,11 @@ int main() { return glc::runApp<MyTutorial>(); }
 
 ## Included examples
 
-| Tutorial                | Shows                                                        |
-| ----------------------- | ------------------------------------------------------------ |
-| `tut01_hello_triangle`  | Buffer, VAO, program, hot-reload                             |
-| `tut02_cube_and_camera` | XML mesh, orbit camera, matrix stack, ImGui panel            |
-| `tut03_textured_quad`   | Image loading, samplers, mipmaps, anisotropy, linear vs sRGB |
+| Tutorial                | Shows                                                      |
+| ----------------------- | ---------------------------------------------------------- |
+| `tut01_hello_triangle`  | Buffer, VAO, program, hot-reload                           |
+| `tut02_cube_and_camera` | XML mesh, orbit camera, matrix stack, ImGui panel          |
+| `tut03_textured_quad`   | KTX loading, samplers, mipmaps, anisotropy, linear vs sRGB |
 
 ## What glcore gives you
 
@@ -189,7 +190,7 @@ returns a movable RAII frame; the nesting invariant is checked in every build.
 
 Also: `Camera` with `OrbitController`/`FlyController` (the book's ViewPole/ObjectPole role),
 `Input` with edge detection that goes quiet while ImGui has focus, `Mesh` for gltut's XML format,
-`UniformBuffer` for Tutorial 9+, `loadImage`/`makeTexture2D`/`makeSampler` for Tutorial 14+.
+`UniformBuffer` for Tutorial 9+, `loadTexture2D`/`makeTexture2D`/`makeSampler` for Tutorial 14+.
 
 ## Notes
 
@@ -200,9 +201,21 @@ compile in it unchanged. Switch targets with `-DGLCORE_GL_VERSION=4.1` if a chap
 **No DSA.** `glCreateBuffers` and friends are GL 4.5. Everything here is bind-then-modify, wrapped
 in `ScopedBind` so the pairs cannot drift apart.
 
-**`.dds` textures are not supported.** stb_image covers PNG/JPG/TGA/BMP/HDR, which is what the
-book's stb-backed loader used. Converting the handful of `.dds` assets to PNG is usually easier than
-adding a DDS reader.
+**Textures are KTX/DDS only — PNG and JPEG are not loaded at runtime.** gli reads GPU-ready
+containers, not compressed image formats, so source images are converted offline:
+
+```sh
+python3 tools/png_to_ktx.py assets/textures/checker.png                  # -> checker.ktx, GL_RGB8
+python3 tools/png_to_ktx.py assets/textures/checker.png --srgb -o x.ktx  # -> GL_SRGB8
+```
+
+The payoff is that the internal format lives in the asset: sRGB-vs-linear, block compression and any
+mip chain are authored once rather than decided at every upload. That is why `tut03` loads two
+_files_ to compare `GL_RGB8` against `GL_SRGB8`. The cost is that every new texture needs a
+conversion step, and `.png` sources are kept in the repo purely as the editable master.
+
+Textures generated procedurally in code — which several of the texturing chapters do — skip all of
+this and go through `glc::makeTexture2D(w, h, internalFormat, format, type, pixels)`.
 
 **GLEW quirks are handled once**, in `GlLoader`: `glewExperimental` is set for the core profile, and
 the spurious `GL_INVALID_ENUM` that `glewInit` leaves behind is discarded so it cannot be blamed on

@@ -1,8 +1,10 @@
-// A reference for the texturing chapters (14-17): image loading, sampler
+// A reference for the texturing chapters (14-17): texture loading, sampler
 // objects, mipmaps, anisotropy and the linear-vs-sRGB distinction.
 //
-// The two quads show the *same* image uploaded as GL_RGB8 and as GL_SRGB8.
-// Tutorial 16 is about why they differ.
+// The two quads show the same pixels as GL_RGB8 and as GL_SRGB8. Tutorial 16 is
+// about why they differ. Note that these are two *files*: with KTX the internal
+// format is authored into the asset, so the choice is made by
+// tools/png_to_ktx.py --srgb rather than by a flag at upload time.
 
 #include <glcore/app.hpp>
 #include <glcore/buffer.hpp>
@@ -49,12 +51,9 @@ protected:
 		program_ = &shaders().add(glc::paths::tutorialShader("quad.vert"),
 		                          glc::paths::tutorialShader("quad.frag"));
 
-		const glc::ImageData image = glc::loadImage(glc::paths::asset("textures/checker.png"));
-		glc::log::info("loaded checker.png: {}x{}, {} channels", image.width, image.height,
-		               image.channels);
-
-		linear_ = glc::makeTexture2D(image, {.colorSpace = glc::ColorSpace::Linear});
-		srgb_ = glc::makeTexture2D(image, {.colorSpace = glc::ColorSpace::Srgb});
+		linear_ = glc::loadTexture2D(glc::paths::asset("textures/checker.ktx"));
+		srgb_ = glc::loadTexture2D(glc::paths::asset("textures/checker_srgb.ktx"));
+		glc::log::info("loaded checker.ktx (GL_RGB8) and checker_srgb.ktx (GL_SRGB8)");
 
 		maxAnisotropy_ = glc::maxSupportedAnisotropy();
 		glc::log::info("max anisotropy: {}", maxAnisotropy_);

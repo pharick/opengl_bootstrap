@@ -34,11 +34,26 @@ target_link_libraries(imgui PUBLIC glfw)
 add_library(third_party::imgui ALIAS imgui)
 
 # ---------------------------------------------------------------------------
-# stb_image -- vendored single header (v2.30), no upstream package exists
+# gli -- git submodule, header-only. Reads KTX and DDS.
 # ---------------------------------------------------------------------------
-add_library(stb STATIC "${CMAKE_CURRENT_SOURCE_DIR}/stb/stb_image_impl.cpp")
-target_include_directories(stb SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/stb")
-add_library(third_party::stb ALIAS stb)
+# gli vendors its own glm under external/, which is deliberately NOT put on the
+# include path: glm types cross the gli/glcore boundary, so two different glm
+# versions in one build would be an ODR violation. gli compiles fine against the
+# project's Homebrew glm, so there is exactly one.
+#
+# SYSTEM is load-bearing here, unlike for most vendored headers -- gli emits
+# ~390 warnings under this project's warning set.
+set(GLI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/gli")
+if(NOT EXISTS "${GLI_DIR}/gli/gli.hpp")
+    message(FATAL_ERROR
+        "gli sources not found in third_party/gli.\n"
+        "Run: git submodule update --init --recursive")
+endif()
+
+add_library(gli INTERFACE)
+target_include_directories(gli SYSTEM INTERFACE "${GLI_DIR}")
+target_link_libraries(gli INTERFACE glm::glm)
+add_library(third_party::gli ALIAS gli)
 
 # The test framework is Catch2, from Homebrew -- see tests/CMakeLists.txt.
 # Nothing vendored here for it.

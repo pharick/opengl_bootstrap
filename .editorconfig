@@ -27,6 +27,13 @@ max_line_length = 100
 indent_style = space
 indent_size = 4
 
+# Asset tooling. PEP 8 spacing, but the project's 100-column limit rather than
+# PEP 8's 79, so it matches the C++ next to it.
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
 [*.{json,yml,yaml}]
 indent_style = space
 indent_size = 2

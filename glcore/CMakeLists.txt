@@ -4,7 +4,6 @@ add_library(glcore STATIC
     src/camera.cpp
     src/gl_check.cpp
     src/glsl_source.cpp
-    src/image.cpp
     src/imgui_layer.cpp
     src/input.cpp
     src/log.cpp
@@ -40,7 +39,7 @@ target_include_directories(glcore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 # project's warning flags never fire inside these headers.
 target_link_libraries(glcore
     PUBLIC GLEW::GLEW glfw glm::glm OpenGL::GL third_party::imgui
-    PRIVATE glcore_warnings third_party::stb)
+    PRIVATE glcore_warnings third_party::gli)
 
 target_compile_definitions(glcore PUBLIC
     GLC_PROJECT_ROOT="${CMAKE_SOURCE_DIR}"
