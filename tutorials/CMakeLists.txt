@@ -7,3 +7,4 @@ if(GLCORE_WITH_MESH_XML)
 endif()
 
 add_tutorial(tut03_textured_quad)
+add_tutorial(tut09_basic_lighting)
