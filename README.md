@@ -14,8 +14,8 @@ brew install cmake ninja glfw glew glm tinyxml2 catch2
 ```
 
 `tinyxml2` is only needed for gltut's XML meshes (Tutorial 7 onward). Without it the project still
-configures and builds; the mesh loader and `tut02` are simply skipped. `catch2` is only needed for
-the tests — pass `-DGLCORE_BUILD_TESTS=OFF` to skip them.
+configures and builds; the mesh loader, `tut02` and `tut10` are simply skipped. `catch2` is only
+needed for the tests — pass `-DGLCORE_BUILD_TESTS=OFF` to skip them.
 
 Dear ImGui and [gli](https://github.com/g-truc/gli) are pinned git submodules — neither has a
 formula worth using. Everything else comes from Homebrew.
@@ -150,11 +150,13 @@ int main() { return glc::runApp<MyTutorial>(); }
 
 ## Included examples
 
-| Tutorial                | Shows                                                      |
-| ----------------------- | ---------------------------------------------------------- |
-| `tut01_hello_triangle`  | Buffer, VAO, program, hot-reload                           |
-| `tut02_cube_and_camera` | XML mesh, orbit camera, matrix stack, ImGui panel          |
-| `tut03_textured_quad`   | KTX loading, samplers, mipmaps, anisotropy, linear vs sRGB |
+| Tutorial                | Shows                                                                      |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `tut01_hello_triangle`  | Buffer, VAO, program, hot-reload                                           |
+| `tut02_cube_and_camera` | XML mesh, orbit camera, matrix stack, ImGui panel                          |
+| `tut03_textured_quad`   | KTX loading, samplers, mipmaps, anisotropy, linear vs sRGB                 |
+| `tut09_basic_lighting`  | Diffuse lighting, generated normals, the normal matrix, a `Projection` UBO |
+| `tut10_point_lights`    | Point light, per-vertex vs per-fragment shading, attenuation, shared GLSL  |
 
 ## What glcore gives you
 
@@ -197,6 +199,12 @@ Also: `Camera` with `OrbitController`/`FlyController` (the book's ViewPole/Objec
 **macOS reports a 4.1 context even though the project requests 3.3.** That is expected — macOS only
 ships 3.2 and 4.1 core profiles, so a 3.3 request is satisfied by 4.1. GLSL `#version 330` shaders
 compile in it unchanged. Switch targets with `-DGLCORE_GL_VERSION=4.1` if a chapter needs it.
+
+**gltut's XML meshes are wound clockwise.** `AppConfig::frontFace` defaults to `GL_CCW`, so a
+chapter that loads them with `cullFace = true` needs `.frontFace = GL_CW`. Get it wrong and nothing
+errors — culling just keeps the wrong half of every double-sided surface. `UnitPlane.xml` carries a
+`+Y` copy and a `−Y` copy of the same four corners, so you end up looking at the underside, lit by
+normals pointing at the floor, and the plane renders black.
 
 **No DSA.** `glCreateBuffers` and friends are GL 4.5. Everything here is bind-then-modify, wrapped
 in `ScopedBind` so the pairs cannot drift apart.
