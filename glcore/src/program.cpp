@@ -179,8 +179,8 @@ GLint Program::requireUniform(std::string_view name) const {
 	if (location < 0) {
 		throw std::runtime_error(
 		    std::format("uniform '{}' not found in program {} (misspelled, or unused and "
-		                "therefore optimized out by the GLSL compiler)",
-		                name, handle_.id()));
+			            "therefore optimized out by the GLSL compiler)",
+			            name, handle_.id()));
 	}
 	return location;
 }
@@ -202,7 +202,7 @@ void Program::assertBound() const {
 	if (static_cast<GLuint>(current) != handle_.id()) {
 		throw GlError(
 		    std::format("uniform set on program {} while program {} is bound -- call use() first",
-		                handle_.id(), current));
+			            handle_.id(), current));
 	}
 #endif
 }

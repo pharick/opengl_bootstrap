@@ -4,6 +4,7 @@ add_tutorial(tut01_hello_triangle)
 # Needs the XML mesh loader, so it is only built when tinyxml2 is available.
 if(GLCORE_WITH_MESH_XML)
     add_tutorial(tut02_cube_and_camera)
+    add_tutorial(tut10_point_lights)
 endif()
 
 add_tutorial(tut03_textured_quad)

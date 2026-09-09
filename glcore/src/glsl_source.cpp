@@ -44,7 +44,7 @@ struct IncludeDirective {
 
 std::optional<IncludeDirective> parseInclude(std::string_view line) {
 	const std::string_view trimmed = trim(line);
-	if (!trimmed.starts_with("#")) {
+	if (!trimmed.starts_with('#')) {
 		return std::nullopt;
 	}
 	std::string_view rest = trim(trimmed.substr(1));
@@ -90,7 +90,7 @@ std::expected<fs::path, std::string> resolveInclude(const IncludeDirective& dire
 	}
 	return std::unexpected(
 	    std::format("cannot resolve #include \"{}\" from '{}' (looked next to it and in '{}')",
-	                directive.target, includingFile.string(), paths::asset("shaders").string()));
+		            directive.target, includingFile.string(), paths::asset("shaders").string()));
 }
 
 class Expander {

@@ -38,29 +38,35 @@ struct TypeInfo {
 
 /// Floating point in the file, float in the shader.
 constexpr TypeInfo floatingType() {
-	return {.glType = GL_FLOAT,
-	        .byteSize = 4,
-	        .normalized = false,
-	        .integral = false,
-	        .parseAsInteger = false};
+	return {
+	    .glType = GL_FLOAT,
+	    .byteSize = 4,
+	    .normalized = false,
+	    .integral = false,
+	    .parseAsInteger = false,
+	};
 }
 
 /// Integer in the file, integer in the shader (glVertexAttribIPointer).
 constexpr TypeInfo integerType(GLenum glType, std::size_t byteSize) {
-	return {.glType = glType,
-	        .byteSize = byteSize,
-	        .normalized = false,
-	        .integral = true,
-	        .parseAsInteger = true};
+	return {
+	    .glType = glType,
+	    .byteSize = byteSize,
+	    .normalized = false,
+	    .integral = true,
+	    .parseAsInteger = true,
+	};
 }
 
 /// Integer in the file, rescaled to a float in [0,1] or [-1,1] in the shader.
 constexpr TypeInfo normalizedType(GLenum glType, std::size_t byteSize) {
-	return {.glType = glType,
-	        .byteSize = byteSize,
-	        .normalized = true,
-	        .integral = false,
-	        .parseAsInteger = true};
+	return {
+	    .glType = glType,
+	    .byteSize = byteSize,
+	    .normalized = true,
+	    .integral = false,
+	    .parseAsInteger = true,
+	};
 }
 
 std::optional<TypeInfo> lookupAttributeType(std::string_view name) {
@@ -271,7 +277,7 @@ std::expected<ParsedAttribute, std::string> parseAttribute(const tinyxml2::XMLEl
 	if (*count == 0 || *count % static_cast<std::size_t>(*size) != 0) {
 		return std::unexpected(
 		    std::format("<attribute index=\"{}\"> has {} values, not a multiple of size {}", *index,
-		                *count, *size));
+			            *count, *size));
 	}
 	parsed.elementCount = *count / static_cast<std::size_t>(*size);
 	return parsed;
@@ -300,7 +306,7 @@ parseAttributes(const tinyxml2::XMLElement& root, const fs::path& path) {
 		if (attribute.elementCount != vertexCount) {
 			return std::unexpected(
 			    std::format("attribute {} has {} vertices but attribute {} has {}", attribute.index,
-			                attribute.elementCount, attributes.front().index, vertexCount));
+				            attribute.elementCount, attributes.front().index, vertexCount));
 		}
 	}
 	return attributes;
@@ -329,12 +335,14 @@ parseIndicesCommand(const tinyxml2::XMLElement& node, std::vector<std::byte>& in
 		return std::unexpected(std::format("<indices>: {}", count.error()));
 	}
 
-	return detail::MeshRenderCommand{.primitive = *primitive,
-	                                 .indexed = true,
-	                                 .count = static_cast<GLsizei>(*count),
-	                                 .indexType = type->glType,
-	                                 .byteOffset = offset,
-	                                 .first = 0};
+	return detail::MeshRenderCommand{
+	    .primitive = *primitive,
+	    .indexed = true,
+	    .count = static_cast<GLsizei>(*count),
+	    .indexType = type->glType,
+	    .byteOffset = offset,
+	    .first = 0,
+	};
 }
 
 std::expected<detail::MeshRenderCommand, std::string>
@@ -356,12 +364,14 @@ parseArraysCommand(const tinyxml2::XMLElement& node) {
 		return std::unexpected(count.error());
 	}
 
-	return detail::MeshRenderCommand{.primitive = *primitive,
-	                                 .indexed = false,
-	                                 .count = static_cast<GLsizei>(*count),
-	                                 .indexType = GL_UNSIGNED_SHORT,
-	                                 .byteOffset = 0,
-	                                 .first = *start};
+	return detail::MeshRenderCommand{
+	    .primitive = *primitive,
+	    .indexed = false,
+	    .count = static_cast<GLsizei>(*count),
+	    .indexType = GL_UNSIGNED_SHORT,
+	    .byteOffset = 0,
+	    .first = *start,
+	};
 }
 
 /// Walks the children in document order so commands run in the order written.
@@ -408,13 +418,15 @@ std::vector<std::byte> packAttributes(std::vector<ParsedAttribute>& attributes) 
 }
 
 AttributeDesc describeAttribute(const ParsedAttribute& attribute) {
-	return AttributeDesc{.location = attribute.index,
-	                     .components = attribute.size,
-	                     .type = attribute.type.glType,
-	                     .normalized = attribute.type.normalized,
-	                     .stride = 0, // each attribute array is tightly packed
-	                     .offset = attribute.byteOffset,
-	                     .integer = attribute.type.integral};
+	return AttributeDesc{
+	    .location = attribute.index,
+	    .components = attribute.size,
+	    .type = attribute.type.glType,
+	    .normalized = attribute.type.normalized,
+	    .stride = 0, // each attribute array is tightly packed
+	    .offset = attribute.byteOffset,
+	    .integer = attribute.type.integral,
+	};
 }
 
 struct ParsedVao {
@@ -446,7 +458,7 @@ std::expected<ParsedVao, std::string> parseVao(const tinyxml2::XMLElement& node,
 		if (found == attributes.end()) {
 			return std::unexpected(
 			    std::format("<vao name=\"{}\"> references attribute {}, which is not declared",
-			                vaoName, *attrib));
+				            vaoName, *attrib));
 		}
 		parsed.attributes.push_back(describeAttribute(*found));
 	}
@@ -516,9 +528,10 @@ std::expected<Mesh, std::string> Mesh::tryFromXmlFile(const fs::path& path) {
 		if (!vao) {
 			return std::unexpected(vao.error());
 		}
-		mesh.namedVaos_.push_back(
-		    NamedVao{.name = std::move(vao->name),
-		             .vao = makeVertexArray(mesh.attributeBuffer_, vao->attributes, elements)});
+		mesh.namedVaos_.push_back(NamedVao{
+		    .name = std::move(vao->name),
+		    .vao = makeVertexArray(mesh.attributeBuffer_, vao->attributes, elements),
+		});
 	}
 
 	return mesh;
@@ -551,13 +564,14 @@ Mesh Mesh::fromInterleaved(std::span<const std::byte> vertices,
 	mesh.mainVao_ = makeVertexArray(mesh.attributeBuffer_, attributes,
 	                                hasIndices ? &mesh.indexBuffer_ : nullptr);
 
-	mesh.commands_.push_back(
-	    RenderCommand{.primitive = primitive,
-	                  .indexed = hasIndices,
-	                  .count = hasIndices ? static_cast<GLsizei>(indices.size()) : vertexCount,
-	                  .indexType = GL_UNSIGNED_INT,
-	                  .byteOffset = 0,
-	                  .first = 0});
+	mesh.commands_.push_back(RenderCommand{
+	    .primitive = primitive,
+	    .indexed = hasIndices,
+	    .count = hasIndices ? static_cast<GLsizei>(indices.size()) : vertexCount,
+	    .indexType = GL_UNSIGNED_INT,
+	    .byteOffset = 0,
+	    .first = 0,
+	});
 
 	return mesh;
 }

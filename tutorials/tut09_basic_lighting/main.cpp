@@ -181,7 +181,7 @@ protected:
 	void onInit() override {
 		planeMesh_ =
 		    glc::Mesh::fromInterleaved(std::as_bytes(std::span{kPlaneVertices}), kMeshAttributes,
-		                               static_cast<GLsizei>(kPlaneVertices.size()), kPlaneIndices);
+			                           static_cast<GLsizei>(kPlaneVertices.size()), kPlaneIndices);
 		cylinderMesh_ = makeCylinder(16);
 
 		program_ = &shaders().add(glc::paths::tutorialShader("lighting.vert"),

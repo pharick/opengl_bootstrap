@@ -32,12 +32,14 @@ struct Vertex {
 	glm::vec2 texCoord;
 };
 
-constexpr std::array<Vertex, 4> kQuad{{
-    {.position = {-0.5F, -0.5F}, .texCoord = {0.0F, 0.0F}},
-    {.position = {0.5F, -0.5F}, .texCoord = {1.0F, 0.0F}},
-    {.position = {0.5F, 0.5F}, .texCoord = {1.0F, 1.0F}},
-    {.position = {-0.5F, 0.5F}, .texCoord = {0.0F, 1.0F}},
-}};
+constexpr std::array<Vertex, 4> kQuad{
+    {
+        {.position = {-0.5F, -0.5F}, .texCoord = {0.0F, 0.0F}},
+        {.position = {0.5F, -0.5F}, .texCoord = {1.0F, 0.0F}},
+        {.position = {0.5F, 0.5F}, .texCoord = {1.0F, 1.0F}},
+        {.position = {-0.5F, 0.5F}, .texCoord = {0.0F, 1.0F}},
+    },
+};
 
 constexpr std::array<std::uint16_t, 6> kIndices{0, 1, 2, 0, 2, 3};
 
@@ -63,14 +65,18 @@ protected:
 		ebo_ = glc::makeBuffer(GL_ELEMENT_ARRAY_BUFFER, kIndices);
 		vao_ = glc::makeVertexArray(vbo_,
 		                            std::array{
-		                                glc::AttributeDesc{.location = kPositionLocation,
-		                                                   .components = 2,
-		                                                   .stride = sizeof(Vertex),
-		                                                   .offset = offsetof(Vertex, position)},
-		                                glc::AttributeDesc{.location = kTexCoordLocation,
-		                                                   .components = 2,
-		                                                   .stride = sizeof(Vertex),
-		                                                   .offset = offsetof(Vertex, texCoord)},
+		                                glc::AttributeDesc{
+		                                    .location = kPositionLocation,
+		                                    .components = 2,
+		                                    .stride = sizeof(Vertex),
+		                                    .offset = offsetof(Vertex, position),
+		                                },
+		                                glc::AttributeDesc{
+		                                    .location = kTexCoordLocation,
+		                                    .components = 2,
+		                                    .stride = sizeof(Vertex),
+		                                    .offset = offsetof(Vertex, texCoord),
+		                                },
 		                            },
 		                            &ebo_);
 	}

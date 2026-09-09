@@ -111,7 +111,7 @@ void App::applyInitialGlState() const {
 	if (config_.cullFace) {
 		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
-		glFrontFace(GL_CCW);
+		glFrontFace(config_.frontFace);
 	}
 	if (config_.window.samples > 0) {
 		glEnable(GL_MULTISAMPLE);
@@ -166,6 +166,9 @@ void App::drawStatsOverlay() {
 	                        ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowBgAlpha(0.5F);
 
+	// ImGui declares its flag constants as signed ints, so combining them trips
+	// bugprone-signed-bitwise. Nothing to fix on our side.
+	// NOLINTNEXTLINE(bugprone-signed-bitwise)
 	constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
 	                                   ImGuiWindowFlags_AlwaysAutoResize |
 	                                   ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;

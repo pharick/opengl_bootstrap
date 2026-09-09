@@ -25,6 +25,11 @@ struct AppConfig {
 	bool depthTest = true;
 	bool cullFace = false;
 
+	/// Winding order that counts as front-facing, when cullFace is on. gltut's
+	/// XML meshes are wound clockwise, so a chapter loading those wants GL_CW --
+	/// otherwise culling keeps the wrong half of every double-sided surface.
+	GLenum frontFace = GL_CCW;
+
 	/// Create a Dear ImGui context and call onGui() every frame.
 	bool imgui = true;
 

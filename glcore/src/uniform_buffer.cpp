@@ -22,7 +22,7 @@ void UniformBuffer::update(const void* data, std::size_t bytes, std::size_t offs
 	if (offsetBytes + bytes > size_) {
 		throw std::out_of_range(
 		    std::format("uniform buffer update of {} bytes at offset {} exceeds its size of {}",
-		                bytes, offsetBytes, size_));
+			            bytes, offsetBytes, size_));
 	}
 	bufferSubData(buffer_, GL_UNIFORM_BUFFER, offsetBytes, data, bytes);
 }

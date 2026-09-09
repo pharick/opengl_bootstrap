@@ -50,14 +50,14 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 	if (loaded.empty()) {
 		throw std::runtime_error(
 		    std::format("cannot load texture '{}' -- gli reads .ktx and .dds only; convert "
-		                "other formats with tools/png_to_ktx.py",
-		                path.string()));
+			            "other formats with tools/png_to_ktx.py",
+			            path.string()));
 	}
 	if (loaded.target() != gli::TARGET_2D) {
 		throw std::runtime_error(
 		    std::format("texture '{}' is not a plain 2D texture (cubemaps and arrays are not "
-		                "wired up yet)",
-		                path.string()));
+			            "wired up yet)",
+			            path.string()));
 	}
 
 	const gli::texture2d texture{loaded};

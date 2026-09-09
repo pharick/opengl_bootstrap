@@ -131,7 +131,7 @@ GlLoader GlLoader::initForCurrentContext() {
 	if (const GLenum status = glewInit(); status != GLEW_OK) {
 		throw std::runtime_error(
 		    std::format("failed to initialize GLEW: {}",
-		                reinterpret_cast<const char*>(glewGetErrorString(status))));
+			            reinterpret_cast<const char*>(glewGetErrorString(status))));
 	}
 
 	// glewInit itself calls glGetString(GL_EXTENSIONS), which is illegal in a
