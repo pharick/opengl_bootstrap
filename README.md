@@ -14,8 +14,8 @@ brew install cmake ninja glfw glew glm tinyxml2 catch2
 ```
 
 `tinyxml2` is only needed for gltut's XML meshes (Tutorial 7 onward). Without it the project still
-configures and builds; the mesh loader, `tut02` and `tut10` are simply skipped. `catch2` is only
-needed for the tests — pass `-DGLCORE_BUILD_TESTS=OFF` to skip them.
+configures and builds; the mesh loader and the chapters that load XML meshes are simply skipped.
+`catch2` is only needed for the tests — pass `-DGLCORE_BUILD_TESTS=OFF` to skip them.
 
 Dear ImGui and [gli](https://github.com/g-truc/gli) are pinned git submodules — neither has a
 formula worth using. Everything else comes from Homebrew.
@@ -157,6 +157,7 @@ int main() { return glc::runApp<MyTutorial>(); }
 | `tut03_textured_quad`   | KTX loading, samplers, mipmaps, anisotropy, linear vs sRGB                 |
 | `tut09_basic_lighting`  | Diffuse lighting, generated normals, the normal matrix, a `Projection` UBO |
 | `tut10_point_lights`    | Point light, per-vertex vs per-fragment shading, attenuation, shared GLSL  |
+| `tut11_specular_lights` | Specular highlights: Phong, Blinn-Phong and Gaussian, isolated per term    |
 
 ## What glcore gives you
 

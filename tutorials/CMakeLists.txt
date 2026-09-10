@@ -5,6 +5,7 @@ add_tutorial(tut01_hello_triangle)
 if(GLCORE_WITH_MESH_XML)
     add_tutorial(tut02_cube_and_camera)
     add_tutorial(tut10_point_lights)
+    add_tutorial(tut11_specular_lights)
 endif()
 
 add_tutorial(tut03_textured_quad)

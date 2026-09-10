@@ -28,7 +28,7 @@ void main() {
 	vec3 normalCamera = normalize(normalModelToCamera * inNormal);
 	vec3 lightDirection;
 	vec3 attenuatedLightIntensity =
-	    ApplyLightIntensity(cameraPosition.xyz, lightPosition, lightIntensity, lightAttenuation,
+	    applyLightIntensity(cameraPosition.xyz, lightPosition, lightIntensity, lightAttenuation,
 		                    useInverseSquaredAttenuation, lightDirection);
 	float cosAngleIncidence = dot(normalCamera, lightDirection);
 	vertexColor = diffuseColor * attenuatedLightIntensity * clamp(cosAngleIncidence, 0.0, 1.0) +

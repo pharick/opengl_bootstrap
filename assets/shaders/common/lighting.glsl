@@ -1,7 +1,7 @@
 #ifndef GLC_LIGHTING_GLSL
 #define GLC_LIGHTING_GLSL
 
-vec3 ApplyLightIntensity(in vec3 cameraSpacePosition, in vec3 lightPosition, in vec3 lightIntensity,
+vec3 applyLightIntensity(in vec3 cameraSpacePosition, in vec3 lightPosition, in vec3 lightIntensity,
                          in float lightAttenuation, in bool useInverseSquaredAttenuation,
                          out vec3 lightDirection) {
 	vec3 lightDifference = lightPosition - cameraSpacePosition;

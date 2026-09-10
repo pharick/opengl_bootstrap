@@ -18,7 +18,7 @@ void main() {
 	vec3 normalizedNormal = normalize(cameraSpaceNormal);
 	vec3 lightDirection;
 	vec3 attenuatedLightIntensity =
-	    ApplyLightIntensity(cameraSpacePosition, lightPosition, lightIntensity, lightAttenuation,
+	    applyLightIntensity(cameraSpacePosition, lightPosition, lightIntensity, lightAttenuation,
 		                    useInverseSquaredAttenuation, lightDirection);
 	float diffuseFactor = clamp(dot(normalizedNormal, lightDirection), 0.0, 1.0);
 	vec3 diffuse = diffuseColor * attenuatedLightIntensity * diffuseFactor;
