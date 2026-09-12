@@ -2,9 +2,11 @@
 #include "glcore/camera.hpp"
 #include "glcore/mesh.hpp"
 #include "glcore/paths.hpp"
+#include "glcore/shader_watcher.hpp"
 #include "glcore/uniform_buffer.hpp"
 
 #include "lights.hpp"
+#include "materials.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -13,6 +15,7 @@
 #include <imgui.h>
 
 #include <cmath>
+#include <cstdint>
 #include <format>
 #include <numbers>
 #include <optional>
@@ -44,6 +47,15 @@ static_assert(sizeof(ProjectionBlock) == 64);
 
 constexpr GLuint kProjectionBlockBinding = 0;
 constexpr GLuint kLightBlockBinding = 1;
+constexpr GLuint kMaterialBlockBinding = 2;
+
+/// Where an object's diffuse colour comes from, which also settles which
+/// program can draw it. One parameter rather than two, because a program and a
+/// VAO that disagree fail silently rather than erroring.
+enum class Shading : std::uint8_t {
+	VertexColor, ///< mesh supplies attribute 1; material tints it
+	Material,    ///< no vertex colours; the material is the colour
+};
 
 class DynamicRange final : public glc::App {
 public:
@@ -57,30 +69,45 @@ public:
 
 protected:
 	void onInit() override {
-		program_ = &shaders().add(glc::paths::tutorialShader("basic.vert"),
-		                          glc::paths::tutorialShader("basic.frag"));
-
+		// meshes
 		groundMesh_ = glc::Mesh::fromXmlFile(glc::paths::asset("meshes/Ground.xml"));
 		tetrahedronMesh_ = glc::Mesh::fromXmlFile(glc::paths::asset("meshes/UnitTetrahedron.xml"));
 		cubeMesh_ = glc::Mesh::fromXmlFile(glc::paths::asset("meshes/UnitCubeLit.xml"));
 		cylinderMesh_ = glc::Mesh::fromXmlFile(glc::paths::asset("meshes/UnitCylinder.xml"));
 		sphereMesh_ = glc::Mesh::fromXmlFile(glc::paths::asset("meshes/UnitSphere.xml"));
 
-		projectionBlock_.bindToPoint(kProjectionBlockBinding);
-		program_->get().bindUniformBlock("Projection", kProjectionBlockBinding);
-
-		camera().setPerspective(45.0F, aspect(), 1.0F, 1000.0F);
-		projectionBlock_.update(ProjectionBlock{camera().projection()});
-
-		lightBlock_.bindToPoint(kLightBlockBinding);
-		program_->get().bindUniformBlock("Light", kLightBlockBinding);
-
-		// Block bindings are per-program state, so the unlit program needs its
-		// own call even though it shares the buffer.
+		// program for light markers
 		unlitProgram_ = &shaders().add(glc::paths::tutorialShader("unlit.vert"),
 		                               glc::paths::tutorialShader("unlit.frag"));
 		unlitProgram_->get().bindUniformBlock("Projection", kProjectionBlockBinding);
 
+		// vertex color program
+		litVertexColorProgram_ = &shaders().add(glc::paths::tutorialShader("lit_vertex_color.vert"),
+		                                        glc::paths::tutorialShader("lit.frag"));
+
+		// material program
+		litMaterialProgram_ = &shaders().add(glc::paths::tutorialShader("lit_material.vert"),
+		                                     glc::paths::tutorialShader("lit.frag"));
+
+		// bind and update projection block
+		projectionBlock_.bindToPoint(kProjectionBlockBinding);
+		litVertexColorProgram_->get().bindUniformBlock("Projection", kProjectionBlockBinding);
+		litMaterialProgram_->get().bindUniformBlock("Projection", kProjectionBlockBinding);
+
+		camera().setPerspective(45.0F, aspect(), 1.0F, 1000.0F);
+		projectionBlock_.update(ProjectionBlock{camera().projection()});
+
+		// bind light block
+		lightBlock_.bindToPoint(kLightBlockBinding);
+		litVertexColorProgram_->get().bindUniformBlock("Light", kLightBlockBinding);
+		litMaterialProgram_->get().bindUniformBlock("Light", kLightBlockBinding);
+
+		// The material buffer holds all six; a slice is bound per draw, so
+		// there is no bindToPoint here -- only the per-program block binding.
+		litVertexColorProgram_->get().bindUniformBlock("Material", kMaterialBlockBinding);
+		litMaterialProgram_->get().bindUniformBlock("Material", kMaterialBlockBinding);
+
+		// set up fly controller
 		fly_.settings().unitsPerSecond = 50.0F;
 	}
 
@@ -114,9 +141,6 @@ protected:
 
 		lightBlock_.update(lightsManager_.toBlock(camera().view()));
 
-		const glc::Program& program = program_->get();
-		program.use();
-
 		glc::MatrixStack& stack = matrices();
 		stack.SetMatrix(camera().view());
 
@@ -125,7 +149,7 @@ protected:
 
 			stack.RotateX(-90.0F);
 
-			drawObject(groundMesh_);
+			drawObject(groundMesh_, Shading::VertexColor, MaterialId::Ground);
 		}
 
 		{
@@ -136,7 +160,8 @@ protected:
 			stack.Translate(0.0F, std::numbers::sqrt2_v<float>, 0.0F);
 			stack.Rotate({-0.707F, 0.0F, -0.707F}, 54.735F);
 
-			drawObject(tetrahedronMesh_, "lit-color");
+			drawObject(tetrahedronMesh_, Shading::VertexColor, MaterialId::Tetrahedron,
+			           "lit-color");
 		}
 
 		{
@@ -147,7 +172,7 @@ protected:
 			stack.Scale(4.0F, 9.0F, 1.0F);
 			stack.Translate(0.0F, 0.5F, 0.0F);
 
-			drawObject(cubeMesh_, "lit");
+			drawObject(cubeMesh_, Shading::Material, MaterialId::Monolith, "lit");
 		}
 
 		{
@@ -158,7 +183,7 @@ protected:
 			stack.RotateY(-10.0F);
 			stack.Scale(20.0F);
 
-			drawObject(cubeMesh_, "lit-color");
+			drawObject(cubeMesh_, Shading::VertexColor, MaterialId::Cube, "lit-color");
 		}
 
 		{
@@ -168,7 +193,7 @@ protected:
 			stack.Scale(15.0F, 55.0F, 15.0F);
 			stack.Translate(0.0F, 0.5F, 0.0F);
 
-			drawObject(cylinderMesh_, "lit-color");
+			drawObject(cylinderMesh_, Shading::VertexColor, MaterialId::Cylinder, "lit-color");
 		}
 
 		{
@@ -177,7 +202,7 @@ protected:
 			stack.Translate(-83.0F, 14.0F, -77.0F);
 			stack.Scale(20.0F);
 
-			drawObject(sphereMesh_, "lit");
+			drawObject(sphereMesh_, Shading::Material, MaterialId::Sphere, "lit");
 		}
 
 		drawLightMarkers(stack);
@@ -221,10 +246,13 @@ protected:
 
 private:
 	glc::FlyController fly_{{-100.0F, 100.0F, 160.0F}, -66.0F, -25.5F};
-	LightManager lightsManager_;
 
-	glc::ReloadableProgram* program_{};
+	LightManager lightsManager_;
+	MaterialSet materials_;
+
 	glc::ReloadableProgram* unlitProgram_{};
+	glc::ReloadableProgram* litVertexColorProgram_{};
+	glc::ReloadableProgram* litMaterialProgram_{};
 
 	bool drawLights_{true};
 
@@ -318,9 +346,28 @@ private:
 		}
 	}
 
-	void drawObject(const glc::Mesh& mesh, std::optional<std::string_view> vaoName = std::nullopt) {
-		const glc::Program& program = program_->get();
+	/// Binds the material slice, picks and activates the matching program, and
+	/// draws.
+	///
+	/// Shading selects the program rather than the caller passing one, because
+	/// the two can disagree in a way that produces no error: the vertex-colour
+	/// program run over a "lit" VAO reads the disabled-attribute constant
+	/// (0, 0, 0, 1) and multiplies the material to black.
+	///
+	/// Program::set throws in debug builds when the program is not the bound
+	/// one, so use() has to happen here rather than once per frame.
+	void drawObject(const glc::Mesh& mesh, Shading shading, MaterialId materialId,
+	                std::optional<std::string_view> vaoName = std::nullopt) {
+		materials_.bind(kMaterialBlockBinding, materialId);
 
+		const glc::Program& program = shading == Shading::VertexColor
+		                                  ? litVertexColorProgram_->get()
+		                                  : litMaterialProgram_->get();
+		program.use();
+
+		// Non-uniform scales in this scene (the monolith is 4x9x1), so the
+		// upper-left 3x3 is no longer enough -- normals need the inverse
+		// transpose to stay perpendicular.
 		const glm::mat3 normalModelToCamera(
 		    glm::transpose(glm::inverse(glm::mat3(matrices().Top()))));
 
