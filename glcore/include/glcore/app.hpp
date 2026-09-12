@@ -127,6 +127,14 @@ protected:
 	[[nodiscard]] const AppConfig& config() const noexcept {
 		return config_;
 	}
+
+	/// Changes the colour clear() uses from the next frame on. AppConfig is
+	/// otherwise fixed at construction, but a sky that tracks the time of day
+	/// (Tutorial 12) has to move, and clear() already reads this value every
+	/// frame -- it was simply unreachable.
+	void setClearColor(const glm::vec4& color) noexcept {
+		config_.clearColor = color;
+	}
 	[[nodiscard]] glm::ivec2 framebufferSize() const {
 		return window_.framebufferSize();
 	}

@@ -151,6 +151,15 @@ public:
 		return position_;
 	}
 
+	/// Degrees, in the same convention the constructor takes -- so a readout of
+	/// these three values can be pasted straight back in as a starting pose.
+	[[nodiscard]] float yaw() const noexcept {
+		return yawDegrees_;
+	}
+	[[nodiscard]] float pitch() const noexcept {
+		return pitchDegrees_;
+	}
+
 	[[nodiscard]] Settings& settings() noexcept {
 		return settings_;
 	}

@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 
 /// One light as the shader sees it. `cameraSpacePos.w` selects the kind:
 /// 0 makes the xyz a direction (the sun, unattenuated), 1 makes it a position.
@@ -29,6 +30,10 @@ struct LightBlock {
 	std::array<PerLight, kNumberOfPointLights + 1> lights; ///< [0] is the sun
 };
 static_assert(sizeof(LightBlock) == 160);
+
+/// Which clocks a timer command applies to. gltut binds these to the 1, 2 and
+/// 3 keys.
+enum class TimerScope : std::uint8_t { Sun, PointLights, All };
 
 /// The day/night cycle: one sun on a 30-second loop plus three point lights on
 /// loops of their own, all authored in world space and converted on demand.
@@ -53,6 +58,25 @@ public:
 	/// direction at alpha 0 points straight up, and the dark stretch of the
 	/// keyframe table straddles hour 12.
 	[[nodiscard]] float sunTime() const;
+
+	/// Progress through the day, [0, 1). Useful for a progress bar; sunTime()
+	/// is the same value in hours.
+	[[nodiscard]] float sunAlpha() const;
+
+	// Timer control. Scrubbing works while paused, which is the point of it.
+
+	void setPaused(TimerScope scope, bool paused);
+	/// Flips the scope's state. For All: if anything is still running, pauses
+	/// everything; otherwise resumes everything.
+	void togglePause(TimerScope scope);
+
+	/// True when every timer in `scope` is paused. Meaningful for Sun and
+	/// PointLights; for All it cannot distinguish "all frozen" from "half
+	/// frozen", so drive checkboxes from the two specific scopes instead.
+	[[nodiscard]] bool isPaused(TimerScope scope) const;
+
+	void rewind(TimerScope scope, float seconds);
+	void fastForward(TimerScope scope, float seconds);
 
 	[[nodiscard]] float halfBrightnessDistance() const noexcept {
 		return halfBrightnessDistance_;

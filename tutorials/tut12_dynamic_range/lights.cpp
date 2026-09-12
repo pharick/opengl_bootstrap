@@ -3,6 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
 
+#include <algorithm>
 #include <numbers>
 
 namespace {
@@ -206,6 +207,63 @@ glm::vec4 LightManager::backgroundColor() const {
 	return backgroundInterpolator_.interpolate(sunTimer_.alpha());
 }
 
+float LightManager::sunAlpha() const {
+	return sunTimer_.alpha();
+}
+
 float LightManager::sunTime() const {
 	return sunTimer_.alpha() * 24.0F;
+}
+
+namespace {
+
+/// True when `scope` covers the sun's clock.
+[[nodiscard]] bool includesSun(TimerScope scope) {
+	return scope != TimerScope::PointLights;
+}
+
+/// True when `scope` covers the point lights' clocks.
+[[nodiscard]] bool includesPointLights(TimerScope scope) {
+	return scope != TimerScope::Sun;
+}
+
+} // namespace
+
+void LightManager::setPaused(TimerScope scope, bool paused) {
+	if (includesSun(scope)) {
+		sunTimer_.setPaused(paused);
+	}
+	if (includesPointLights(scope)) {
+		for (glc::CycleTimer& timer : pointTimers_) {
+			timer.setPaused(paused);
+		}
+	}
+}
+
+bool LightManager::isPaused(TimerScope scope) const {
+	const bool sunPaused = !includesSun(scope) || sunTimer_.isPaused();
+	const bool pointsPaused =
+	    !includesPointLights(scope) ||
+	    std::ranges::all_of(pointTimers_, [](const glc::CycleTimer& t) { return t.isPaused(); });
+	return sunPaused && pointsPaused;
+}
+
+void LightManager::togglePause(TimerScope scope) {
+	// For All this reads "if anything is still running, freeze the lot".
+	setPaused(scope, !isPaused(scope));
+}
+
+void LightManager::rewind(TimerScope scope, float seconds) {
+	fastForward(scope, -seconds);
+}
+
+void LightManager::fastForward(TimerScope scope, float seconds) {
+	if (includesSun(scope)) {
+		sunTimer_.fastForward(seconds);
+	}
+	if (includesPointLights(scope)) {
+		for (glc::CycleTimer& timer : pointTimers_) {
+			timer.fastForward(seconds);
+		}
+	}
 }
