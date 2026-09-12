@@ -2,6 +2,8 @@ add_library(glcore STATIC
     src/app.cpp
     src/buffer.cpp
     src/camera.cpp
+    src/cycle_timer.cpp
+    src/frame_timer.cpp
     src/gl_check.cpp
     src/glsl_source.cpp
     src/imgui_layer.cpp
@@ -13,7 +15,6 @@ add_library(glcore STATIC
     src/scoped_bind.cpp
     src/shader_watcher.cpp
     src/texture.cpp
-    src/timer.cpp
     src/uniform_buffer.cpp
     src/vertex_array.cpp
     src/window.cpp)

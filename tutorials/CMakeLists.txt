@@ -6,6 +6,7 @@ if(GLCORE_WITH_MESH_XML)
     add_tutorial(tut02_cube_and_camera)
     add_tutorial(tut10_point_lights)
     add_tutorial(tut11_specular_lights)
+    add_tutorial(tut12_dynamic_range)
 endif()
 
 add_tutorial(tut03_textured_quad)

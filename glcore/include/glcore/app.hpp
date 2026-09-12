@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glcore/camera.hpp>
+#include <glcore/frame_timer.hpp>
 #include <glcore/gl.hpp>
 #include <glcore/gl_check.hpp>
 #include <glcore/imgui_layer.hpp>
@@ -8,7 +9,6 @@
 #include <glcore/log.hpp>
 #include <glcore/matrix_stack.hpp>
 #include <glcore/shader_watcher.hpp>
-#include <glcore/timer.hpp>
 #include <glcore/window.hpp>
 
 #include <glm/vec4.hpp>

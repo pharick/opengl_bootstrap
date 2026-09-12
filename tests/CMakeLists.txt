@@ -1,5 +1,5 @@
 # Tests cover the parts of glcore that need no GL context: source expansion,
-# path resolution and the matrix stack.
+# path resolution, the matrix stack, the cycle timer and the interpolators.
 #
 # Catch2 supplies main() via Catch2::Catch2WithMain, so there is no test_main.cpp.
 
@@ -7,7 +7,9 @@ find_package(Catch2 3 REQUIRED)
 include(Catch)
 
 add_executable(glcore_tests
+    test_cycle_timer.cpp
     test_glsl_source.cpp
+    test_interpolator.cpp
     test_matrix_stack.cpp
     test_paths.cpp)
 

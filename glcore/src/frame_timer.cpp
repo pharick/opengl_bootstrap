@@ -1,4 +1,4 @@
-#include <glcore/timer.hpp>
+#include <glcore/frame_timer.hpp>
 
 #include <GLFW/glfw3.h>
 
