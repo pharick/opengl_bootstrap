@@ -4,7 +4,6 @@
 #include "glcore/paths.hpp"
 #include "glcore/uniform_buffer.hpp"
 
-#include <array>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/mat4x4.hpp>
@@ -12,35 +11,17 @@
 #include <optional>
 #include <string_view>
 
-namespace {
+#include "lights.hpp"
 
-/* Projection Block */
+namespace {
 
 struct ProjectionBlock {
 	glm::mat4 cameraToClipMatrix;
 };
 static_assert(sizeof(ProjectionBlock) == 64);
+
 constexpr GLuint kProjectionBlockBinding = 0;
-
-/* Light Block */
-
-struct PerLight {
-	glm::vec4 cameraSpacePos;
-	glm::vec4 intensity;
-};
-
-constexpr int kNumberOfLights = 4;
-
-struct LightBlock {
-	glm::vec4 ambientIntensity;
-	float lightAttenuation;
-	std::array<float, 3> padding; // std140 requires vec4 alignment
-	std::array<PerLight, kNumberOfLights> lights;
-};
-static_assert(sizeof(LightBlock) == 160);
 constexpr GLuint kLightBlockBinding = 1;
-
-/* Application */
 
 class DynamicRange final : public glc::App {
 public:
@@ -72,32 +53,6 @@ protected:
 		lightBlock_.bindToPoint(kLightBlockBinding);
 		program_->get().bindUniformBlock("Light", kLightBlockBinding);
 
-		lightsData_ = {
-		    .ambientIntensity = glm::vec4{0.2F, 0.2F, 0.2F, 1.0F},
-		    .lightAttenuation = 1.0F / (70.0F * 70.0F), // half-brightness distance at 70 units
-		    .lights =
-		        {
-		            // Directional light
-		            PerLight{
-		                .cameraSpacePos = glm::vec4{0.0F, 0.6F, 0.8F, 0.0F},
-		                .intensity = glm::vec4{0.6F, 0.6F, 0.6F, 1.0F},
-		            },
-		            // Point lights
-		            PerLight{
-		                .cameraSpacePos = glm::vec4{-50.0F, 30.0F, 70.0F, 1.0F},
-		                .intensity = glm::vec4{0.2F, 0.2F, 0.2F, 1.0F},
-		            },
-		            PerLight{
-		                .cameraSpacePos = glm::vec4{70.0F, 30.0F, 50.0F, 1.0F},
-		                .intensity = glm::vec4{0.0F, 0.0F, 0.3F, 1.0F},
-		            },
-		            PerLight{
-		                .cameraSpacePos = glm::vec4{50.0F, 30.0F, -70.0F, 1.0F},
-		                .intensity = glm::vec4{0.3F, 0.0F, 0.0F, 1.0F},
-		            },
-		        },
-		};
-
 		fly_.settings().unitsPerSecond = 50.0F;
 	}
 
@@ -107,10 +62,11 @@ protected:
 
 	void onUpdate(float deltaSeconds) override {
 		fly_.update(camera(), input(), deltaSeconds);
+		lightsManager_.update(deltaSeconds);
 	}
 
 	void onRender() override {
-		lightBlock_.update(lightBlock());
+		lightBlock_.update(lightsManager_.toBlock(camera().view()));
 
 		const glc::Program& program = program_->get();
 		program.use();
@@ -181,7 +137,7 @@ protected:
 
 private:
 	glc::FlyController fly_{{-59.5F, 79.0F, 130.0F}, -90.0F, -45.0F};
-	LightBlock lightsData_{};
+	LightManager lightsManager_;
 
 	glc::ReloadableProgram* program_{};
 
@@ -193,15 +149,6 @@ private:
 	glc::Mesh cubeMesh_;
 	glc::Mesh cylinderMesh_;
 	glc::Mesh sphereMesh_;
-
-	[[nodiscard]] LightBlock lightBlock() const {
-		LightBlock result = lightsData_;
-		for (PerLight& light : result.lights) {
-			const glm::vec4 pos = camera().view() * light.cameraSpacePos;
-			light.cameraSpacePos = pos;
-		}
-		return result;
-	}
 
 	void drawObject(const glc::Mesh& mesh, std::optional<std::string_view> vaoName = std::nullopt) {
 		const glc::Program& program = program_->get();
