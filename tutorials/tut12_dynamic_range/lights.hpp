@@ -63,6 +63,16 @@ public:
 	/// is the same value in hours.
 	[[nodiscard]] float sunAlpha() const;
 
+	// World-space state, for drawing markers where the lights actually are.
+	// toBlock() is built out of these too, so there is one definition of each.
+
+	/// Unit vector pointing *toward* the sun. Derived from the sun timer.
+	[[nodiscard]] glm::vec3 sunDirection() const;
+	[[nodiscard]] glm::vec4 sunIntensity() const;
+
+	[[nodiscard]] glm::vec3 pointLightPosition(std::size_t index) const;
+	[[nodiscard]] glm::vec4 pointLightIntensity(std::size_t index) const;
+
 	// Timer control. Scrubbing works while paused, which is the point of it.
 
 	void setPaused(TimerScope scope, bool paused);
@@ -86,10 +96,6 @@ public:
 	}
 
 private:
-	/// World-space unit vector pointing *toward* the sun. Derived from the sun
-	/// timer, never stored.
-	[[nodiscard]] glm::vec3 sunDirection() const;
-
 	/// k in `I / (1 + k * d*d)`, derived so intensity halves at
 	/// halfBrightnessDistance_.
 	[[nodiscard]] float attenuation() const;

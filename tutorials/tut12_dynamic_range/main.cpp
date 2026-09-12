@@ -28,6 +28,15 @@ constexpr float kClockOffsetHours = 12.0F;
 /// Seconds moved per press of a scrub button.
 constexpr float kScrubSeconds = 1.0F;
 
+/// The sun is directional, so it has no position -- the marker is parked far
+/// enough along its direction to read as "over there", inside the far plane.
+constexpr float kSunMarkerDistance = 500.0F;
+constexpr float kSunMarkerScale = 30.0F;
+
+/// gltut leaves the point-light markers as unscaled unit cubes, which in a
+/// 220-unit scene are single pixels. Big enough to aim at instead.
+constexpr float kPointMarkerScale = 3.0F;
+
 struct ProjectionBlock {
 	glm::mat4 cameraToClipMatrix;
 };
@@ -65,6 +74,12 @@ protected:
 
 		lightBlock_.bindToPoint(kLightBlockBinding);
 		program_->get().bindUniformBlock("Light", kLightBlockBinding);
+
+		// Block bindings are per-program state, so the unlit program needs its
+		// own call even though it shares the buffer.
+		unlitProgram_ = &shaders().add(glc::paths::tutorialShader("unlit.vert"),
+		                               glc::paths::tutorialShader("unlit.frag"));
+		unlitProgram_->get().bindUniformBlock("Projection", kProjectionBlockBinding);
 
 		fly_.settings().unitsPerSecond = 50.0F;
 	}
@@ -164,13 +179,54 @@ protected:
 
 			drawObject(sphereMesh_, "lit");
 		}
+
+		drawLightMarkers(stack);
+	}
+
+	/// Spheres standing in for the lights, drawn with the unlit program so they
+	/// show their own emitted colour rather than being shaded by each other.
+	void drawLightMarkers(glc::MatrixStack& stack) {
+		if (!drawLights_) {
+			return;
+		}
+
+		{
+			const glc::MatrixStack::Frame sunFrame = stack.push();
+
+			stack.Translate(lightsManager_.sunDirection() * kSunMarkerDistance);
+			stack.Scale(kSunMarkerScale);
+
+			drawMarker(lightsManager_.sunIntensity());
+		}
+
+		for (std::size_t i = 0; i < kNumberOfPointLights; ++i) {
+			const glc::MatrixStack::Frame lightFrame = stack.push();
+
+			stack.Translate(lightsManager_.pointLightPosition(i));
+			stack.Scale(kPointMarkerScale);
+
+			drawMarker(lightsManager_.pointLightIntensity(i));
+		}
+	}
+
+	/// Separate from drawObject because the unlit program has no normal matrix,
+	/// and Program::set throws on a uniform the linker dropped.
+	void drawMarker(const glm::vec4& color) {
+		const glc::Program& program = unlitProgram_->get();
+		program.use();
+		program.set("modelToCameraMatrix", matrices().Top());
+		program.set("objectColor", color);
+		sphereMesh_.render("flat");
 	}
 
 private:
-	glc::FlyController fly_{{-59.5F, 79.0F, 130.0F}, -90.0F, -45.0F};
+	glc::FlyController fly_{{-100.0F, 100.0F, 160.0F}, -66.0F, -25.5F};
 	LightManager lightsManager_;
 
 	glc::ReloadableProgram* program_{};
+	glc::ReloadableProgram* unlitProgram_{};
+
+	bool drawLights_{true};
 
 	glc::UniformBuffer projectionBlock_{glc::UniformBuffer::forType<ProjectionBlock>()};
 	glc::UniformBuffer lightBlock_{glc::UniformBuffer::forType<LightBlock>()};
@@ -230,6 +286,8 @@ private:
 	}
 
 	void drawLightingControls() {
+		ImGui::Checkbox("Show light markers", &drawLights_);
+
 		float halfDistance = lightsManager_.halfBrightnessDistance();
 		if (ImGui::SliderFloat("Half-brightness distance", &halfDistance, 5.0F, 500.0F, "%.1f",
 		                       ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat)) {

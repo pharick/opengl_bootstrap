@@ -181,23 +181,33 @@ float LightManager::attenuation() const {
 	return 1.0F / (halfBrightnessDistance_ * halfBrightnessDistance_);
 }
 
-LightBlock LightManager::toBlock(const glm::mat4& worldToCamera) const {
-	const float sunAlpha = sunTimer_.alpha();
+glm::vec4 LightManager::sunIntensity() const {
+	return sunIntensityInterpolator_.interpolate(sunTimer_.alpha());
+}
 
+glm::vec3 LightManager::pointLightPosition(std::size_t index) const {
+	return paths_[index].interpolate(pointTimers_[index].alpha());
+}
+
+glm::vec4 LightManager::pointLightIntensity(std::size_t index) const {
+	return pointIntensity_[index];
+}
+
+LightBlock LightManager::toBlock(const glm::mat4& worldToCamera) const {
 	LightBlock result{};
-	result.ambientIntensity = ambientInterpolator_.interpolate(sunAlpha);
+	result.ambientIntensity = ambientInterpolator_.interpolate(sunTimer_.alpha());
 	result.lightAttenuation = attenuation();
 
 	// One multiply serves both kinds. w = 0 zeroes the view matrix's
 	// translation column, leaving a pure rotation of the direction; w = 1 lets
 	// the translation apply. No branch needed on this side.
 	result.lights[0].cameraSpacePos = worldToCamera * glm::vec4{sunDirection(), 0.0F};
-	result.lights[0].intensity = sunIntensityInterpolator_.interpolate(sunAlpha);
+	result.lights[0].intensity = sunIntensity();
 
 	for (std::size_t i = 0; i < kNumberOfPointLights; ++i) {
-		const glm::vec3 worldPosition = paths_[i].interpolate(pointTimers_[i].alpha());
-		result.lights[i + 1].cameraSpacePos = worldToCamera * glm::vec4{worldPosition, 1.0F};
-		result.lights[i + 1].intensity = pointIntensity_[i];
+		result.lights[i + 1].cameraSpacePos =
+		    worldToCamera * glm::vec4{pointLightPosition(i), 1.0F};
+		result.lights[i + 1].intensity = pointLightIntensity(i);
 	}
 
 	return result;
