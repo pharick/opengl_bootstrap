@@ -1,5 +1,6 @@
 #include "glcore/app.hpp"
 #include "glcore/camera.hpp"
+#include "glcore/cycle_timer.hpp"
 #include "glcore/mesh.hpp"
 #include "glcore/paths.hpp"
 #include "glcore/shader_watcher.hpp"
@@ -35,6 +36,11 @@ constexpr float kScrubSeconds = 1.0F;
 /// enough along its direction to read as "over there", inside the far plane.
 constexpr float kSunMarkerDistance = 500.0F;
 constexpr float kSunMarkerScale = 30.0F;
+
+/// Seconds per full turn of the tetrahedron. A rotating object sweeps a
+/// specular highlight across every surface orientation without the camera
+/// having to move, which is the cheapest way to watch a highlight clip.
+constexpr float kTetraSpinSeconds = 2.5F;
 
 /// gltut leaves the point-light markers as unscaled unit cubes, which in a
 /// 220-unit scene are single pixels. Big enough to aim at instead.
@@ -118,6 +124,7 @@ protected:
 	void onUpdate(float deltaSeconds) override {
 		fly_.update(camera(), input(), deltaSeconds);
 		lightsManager_.update(deltaSeconds);
+		tetraTimer_.update(deltaSeconds);
 	}
 
 	void onGui() override {
@@ -156,6 +163,7 @@ protected:
 			const glc::MatrixStack::Frame tetrahedronFrame = stack.push();
 
 			stack.Translate(75.0F, 5.0F, 75.0F);
+			stack.RotateY(360.0F * tetraTimer_.alpha());
 			stack.Scale(10.0F);
 			stack.Translate(0.0F, std::numbers::sqrt2_v<float>, 0.0F);
 			stack.Rotate({-0.707F, 0.0F, -0.707F}, 54.735F);
@@ -248,6 +256,7 @@ private:
 	glc::FlyController fly_{{-100.0F, 100.0F, 160.0F}, -66.0F, -25.5F};
 
 	LightManager lightsManager_;
+	glc::CycleTimer tetraTimer_{kTetraSpinSeconds};
 	MaterialSet materials_;
 
 	glc::ReloadableProgram* unlitProgram_{};
@@ -295,7 +304,13 @@ private:
 		const auto minute = static_cast<int>((clockHours - static_cast<float>(hour)) * 60.0F);
 
 		ImGui::Text("%02d:%02d", hour, minute);
-		ImGui::ProgressBar(lightsManager_.sunAlpha(), ImVec2{-1.0F, 0.0F});
+
+		// Seeded from the manager every frame, so it tracks the running clock and
+		// becomes a scrub handle the moment it is dragged.
+		float scrubHours = clockHours;
+		if (ImGui::SliderFloat("##time", &scrubHours, 0.0F, 24.0F, "%05.2f h")) {
+			lightsManager_.setSunTime(std::fmod(scrubHours - kClockOffsetHours + 24.0F, 24.0F));
+		}
 
 		drawTimerRow("Sun", TimerScope::Sun);
 		drawTimerRow("Point lights", TimerScope::PointLights);

@@ -25,6 +25,11 @@ public:
 	/// Progress through the cycle, in [0, 1).
 	[[nodiscard]] float alpha() const;
 
+	/// Jumps to a position in the cycle. Values outside [0, 1) wrap, so 1.25
+	/// and -0.75 both land at 0.25. Works while paused -- this is what a scrub
+	/// widget drives.
+	void setAlpha(float alpha);
+
 	/// Position within the current cycle, in [0, duration). Resets every loop;
 	/// this is not the total time since construction.
 	[[nodiscard]] float elapsed() const;

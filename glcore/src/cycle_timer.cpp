@@ -45,6 +45,11 @@ float CycleTimer::alpha() const {
 	return elapsed_ / duration_;
 }
 
+void CycleTimer::setAlpha(float alpha) {
+	elapsed_ = alpha * duration_;
+	wrap();
+}
+
 float CycleTimer::elapsed() const {
 	return elapsed_;
 }

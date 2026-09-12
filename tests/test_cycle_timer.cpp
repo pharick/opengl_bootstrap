@@ -131,6 +131,31 @@ TEST_CASE("reset returns to the start but leaves the pause state alone") {
 	CHECK(timer.isPaused());
 }
 
+TEST_CASE("setAlpha jumps to a position in the cycle") {
+	glc::CycleTimer timer{kDuration};
+	timer.setAlpha(0.25F);
+	CHECK(timer.alpha() == Approx(0.25F));
+	CHECK(timer.elapsed() == Approx(kDuration * 0.25F));
+}
+
+TEST_CASE("setAlpha wraps values outside [0, 1)") {
+	glc::CycleTimer timer{kDuration};
+
+	timer.setAlpha(1.25F);
+	CHECK(timer.alpha() == Approx(0.25F));
+
+	timer.setAlpha(-0.75F);
+	CHECK(timer.alpha() == Approx(0.25F));
+}
+
+TEST_CASE("setAlpha works while paused") {
+	glc::CycleTimer timer{kDuration};
+	timer.setPaused(true);
+	timer.setAlpha(0.6F);
+	CHECK(timer.alpha() == Approx(0.6F));
+	CHECK(timer.isPaused());
+}
+
 TEST_CASE("a non-positive duration is rejected at construction") {
 	CHECK_THROWS_AS(glc::CycleTimer{0.0F}, std::invalid_argument);
 	CHECK_THROWS_AS(glc::CycleTimer{-1.0F}, std::invalid_argument);

@@ -225,6 +225,10 @@ float LightManager::sunTime() const {
 	return sunTimer_.alpha() * 24.0F;
 }
 
+void LightManager::setSunTime(float hours) {
+	sunTimer_.setAlpha(hours / 24.0F);
+}
+
 namespace {
 
 /// True when `scope` covers the sun's clock.

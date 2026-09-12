@@ -59,6 +59,11 @@ public:
 	/// keyframe table straddles hour 12.
 	[[nodiscard]] float sunTime() const;
 
+	/// Jumps the sun to a time of day, in the same hours sunTime() reports.
+	/// The point lights keep their own loops -- this is the day/night cycle
+	/// only.
+	void setSunTime(float hours);
+
 	/// Progress through the day, [0, 1). Useful for a progress bar; sunTime()
 	/// is the same value in hours.
 	[[nodiscard]] float sunAlpha() const;
