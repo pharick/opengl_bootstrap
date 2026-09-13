@@ -27,7 +27,8 @@ struct LightBlock {
 	glm::vec4 ambientIntensity;
 	float lightAttenuation;
 	float maxIntensity;
-	std::array<float, 2> padding; ///< pushes lights[0] to offset 32, as std140 requires
+	float gamma;
+	std::array<float, 1> padding; ///< pushes lights[0] to offset 32, as std140 requires
 	std::array<PerLight, kNumberOfPointLights + 1> lights; ///< [0] is the sun
 };
 static_assert(sizeof(LightBlock) == 160);

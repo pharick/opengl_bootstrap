@@ -153,9 +153,11 @@ protected:
 
 	void onRender() override {
 		// The sky is interpolated too, so it has to be pushed every frame.
-		setClearColor(lightsManager_.backgroundColor());
+		setClearColor(gammaCorrect(lightsManager_.backgroundColor()));
 
-		lightBlock_.update(lightsManager_.toBlock(camera().view()));
+		LightBlock newLightBlock = lightsManager_.toBlock(camera().view());
+		newLightBlock.gamma = gamma_;
+		lightBlock_.update(newLightBlock);
 
 		glc::MatrixStack& stack = matrices();
 		stack.SetMatrix(camera().view());
@@ -257,7 +259,7 @@ protected:
 		const glc::Program& program = unlitProgram_->get();
 		program.use();
 		program.set("modelToCameraMatrix", matrices().Top());
-		program.set("objectColor", color);
+		program.set("objectColor", gammaCorrect(color));
 		sphereMesh_.render("flat");
 	}
 
@@ -273,6 +275,7 @@ private:
 	glc::ReloadableProgram* litMaterialProgram_{};
 
 	bool drawLights_{true};
+	float gamma_{2.2F};
 
 	glc::UniformBuffer projectionBlock_{glc::UniformBuffer::forType<ProjectionBlock>()};
 	glc::UniformBuffer lightBlock_{glc::UniformBuffer::forType<LightBlock>()};
@@ -392,8 +395,8 @@ private:
 		if (ImGui::Button("Copy as FlyController{...}")) {
 			ImGui::SetClipboardText(
 			    std::format("glc::FlyController fly_{{{{{:.1f}F, {:.1f}F, {:.1f}F}}, {:.1f}F, "
-				            "{:.1f}F}};",
-				            position.x, position.y, position.z, fly_.yaw(), fly_.pitch())
+			                "{:.1f}F}};",
+			                position.x, position.y, position.z, fly_.yaw(), fly_.pitch())
 			        .c_str());
 		}
 	}
@@ -431,6 +434,12 @@ private:
 			return;
 		}
 		mesh.render(vaoName.value());
+	}
+
+	[[nodiscard]] glm::vec4 gammaCorrect(const glm::vec4& color) const {
+		const float invGamma = 1.0F / gamma_;
+		return glm::vec4{std::pow(color.r, invGamma), std::pow(color.g, invGamma),
+		                 std::pow(color.b, invGamma), color.a};
 	}
 };
 

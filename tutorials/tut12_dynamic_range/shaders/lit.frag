@@ -26,6 +26,7 @@ uniform Light {
     vec4 ambientIntensity;
     float lightAttenuation;
     float maxIntensity;
+    float gamma;
     PerLight lights[numberOfLights];
 }
 Lgt;
@@ -90,5 +91,8 @@ void main() {
     }
 
     vec3 toneMapped = accumLighting.rgb / Lgt.maxIntensity;
-    outputColor = vec4(toneMapped, accumLighting.a);
+    vec3 invGamma = 1.0 / Lgt.gamma;
+    vec3 gammaCorrected = pow(toneMapped, invGamma);
+
+    outputColor = vec4(gammaCorrected, accumLighting.a);
 }
