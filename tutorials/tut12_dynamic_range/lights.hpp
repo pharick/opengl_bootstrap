@@ -26,7 +26,8 @@ constexpr std::size_t kNumberOfPointLights = 3;
 struct LightBlock {
 	glm::vec4 ambientIntensity;
 	float lightAttenuation;
-	std::array<float, 3> padding; ///< pushes lights[0] to offset 32, as std140 requires
+	float maxIntensity;
+	std::array<float, 2> padding; ///< pushes lights[0] to offset 32, as std140 requires
 	std::array<PerLight, kNumberOfPointLights + 1> lights; ///< [0] is the sun
 };
 static_assert(sizeof(LightBlock) == 160);

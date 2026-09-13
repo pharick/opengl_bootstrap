@@ -196,6 +196,7 @@ glm::vec4 LightManager::pointLightIntensity(std::size_t index) const {
 LightBlock LightManager::toBlock(const glm::mat4& worldToCamera) const {
 	LightBlock result{};
 	result.ambientIntensity = ambientInterpolator_.interpolate(sunTimer_.alpha());
+	result.maxIntensity = maxIntensityInterpolator_.interpolate(sunTimer_.alpha());
 	result.lightAttenuation = attenuation();
 
 	// One multiply serves both kinds. w = 0 zeroes the view matrix's
