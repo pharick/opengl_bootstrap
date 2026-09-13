@@ -91,8 +91,8 @@ void main() {
     }
 
     vec3 toneMapped = accumLighting.rgb / Lgt.maxIntensity;
-    vec3 invGamma = 1.0 / Lgt.gamma;
-    vec3 gammaCorrected = pow(toneMapped, invGamma);
+    float invGamma = 1.0 / Lgt.gamma;
+    vec3 gammaCorrected = pow(toneMapped, vec3(invGamma));
 
     outputColor = vec4(gammaCorrected, accumLighting.a);
 }
