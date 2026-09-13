@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <numbers>
+#include <type_traits>
 
 namespace {
 
@@ -17,31 +18,38 @@ struct SunlightValue {
 	glm::vec4 ambient;
 	glm::vec4 sunIntensity;
 	glm::vec4 background;
+	float maxIntensity; ///< the shader divides by this: HDR -> LDR
 };
 
-/// gltut's LDR lighting environment (Tut 12/SceneLighting.cpp). Deliberately
-/// left too dark at night and prone to clipping by day -- that failure is what
-/// the HDR stage exists to fix, so it is not a bug to tune away here.
+/// gltut's HDR lighting environment (Tut 12/HDRLighting.cpp). Daytime ambient
+/// and sun are the LDR values times three, with maxIntensity 3.0 to match, so
+/// a sunlit surface at noon renders exactly as it did in LDR. The point lights
+/// are scaled the same way but maxIntensity is *not* held at 3.0 for them: it
+/// falls to 1.0 at night, and that is where they become three times brighter
+/// without a single change to their own values.
 constexpr std::array<SunlightValue, 7> kSunlightValues{
     {
         {
             .normTime = 0.0F / 24.0F,
-            .ambient = {0.2F, 0.2F, 0.2F, 1.0F},
-            .sunIntensity = {0.6F, 0.6F, 0.6F, 1.0F},
+            .ambient = {0.6F, 0.6F, 0.6F, 1.0F},
+            .sunIntensity = {1.8F, 1.8F, 1.8F, 1.0F},
             .background = kSkyDaylightColor,
+            .maxIntensity = 3.0F,
         },
         {
             .normTime = 4.5F / 24.0F,
-            .ambient = {0.2F, 0.2F, 0.2F, 1.0F},
-            .sunIntensity = {0.6F, 0.6F, 0.6F, 1.0F},
+            .ambient = {0.6F, 0.6F, 0.6F, 1.0F},
+            .sunIntensity = {1.8F, 1.8F, 1.8F, 1.0F},
             .background = kSkyDaylightColor,
+            .maxIntensity = 3.0F,
         },
         {
             // dusk
             .normTime = 6.5F / 24.0F,
-            .ambient = {0.15F, 0.05F, 0.05F, 1.0F},
-            .sunIntensity = {0.3F, 0.1F, 0.1F, 1.0F},
+            .ambient = {0.225F, 0.075F, 0.075F, 1.0F},
+            .sunIntensity = {0.45F, 0.15F, 0.15F, 1.0F},
             .background = {0.5F, 0.1F, 0.1F, 1.0F},
+            .maxIntensity = 1.5F,
         },
         {
             // night begins
@@ -49,6 +57,7 @@ constexpr std::array<SunlightValue, 7> kSunlightValues{
             .ambient = {0.0F, 0.0F, 0.0F, 1.0F},
             .sunIntensity = {0.0F, 0.0F, 0.0F, 1.0F},
             .background = {0.0F, 0.0F, 0.0F, 1.0F},
+            .maxIntensity = 1.0F,
         },
         {
             // night ends
@@ -56,28 +65,33 @@ constexpr std::array<SunlightValue, 7> kSunlightValues{
             .ambient = {0.0F, 0.0F, 0.0F, 1.0F},
             .sunIntensity = {0.0F, 0.0F, 0.0F, 1.0F},
             .background = {0.0F, 0.0F, 0.0F, 1.0F},
+            .maxIntensity = 1.0F,
         },
         {
             // dawn
             .normTime = 19.5F / 24.0F,
-            .ambient = {0.15F, 0.05F, 0.05F, 1.0F},
-            .sunIntensity = {0.3F, 0.1F, 0.1F, 1.0F},
+            .ambient = {0.225F, 0.075F, 0.075F, 1.0F},
+            .sunIntensity = {0.45F, 0.15F, 0.15F, 1.0F},
             .background = {0.5F, 0.1F, 0.1F, 1.0F},
+            .maxIntensity = 1.5F,
         },
         {
             .normTime = 20.5F / 24.0F,
-            .ambient = {0.2F, 0.2F, 0.2F, 1.0F},
-            .sunIntensity = {0.6F, 0.6F, 0.6F, 1.0F},
+            .ambient = {0.6F, 0.6F, 0.6F, 1.0F},
+            .sunIntensity = {1.8F, 1.8F, 1.8F, 1.0F},
             .background = kSkyDaylightColor,
+            .maxIntensity = 3.0F,
         },
     },
 };
 
-/// Pulls one colour column out of kSunlightValues as keyframes.
+/// Pulls one column out of kSunlightValues as keyframes. The keyframe type
+/// follows whatever the projection returns, so the same helper serves the
+/// vec4 colours and the float maxIntensity.
 template<class Projection>
-[[nodiscard]] std::array<glc::Keyframe<glm::vec4>, kSunlightValues.size()>
-sunColumn(Projection projection) {
-	std::array<glc::Keyframe<glm::vec4>, kSunlightValues.size()> keyframes{};
+[[nodiscard]] auto sunColumn(Projection projection) {
+	using Value = std::invoke_result_t<Projection, const SunlightValue&>;
+	std::array<glc::Keyframe<Value>, kSunlightValues.size()> keyframes{};
 	for (std::size_t i = 0; i < kSunlightValues.size(); ++i) {
 		const SunlightValue& row = kSunlightValues[i];
 		keyframes[i] = {.time = row.normTime, .value = projection(row)};
@@ -134,21 +148,20 @@ constexpr std::array kLeftPath{
 // the timers into the member initializer list rather than the body.
 LightManager::LightManager()
     : pointTimers_{glc::CycleTimer{15.0F}, glc::CycleTimer{25.0F}, glc::CycleTimer{15.0F}},
+      // HDR values: three times the LDR ones, like the sun. See kSunlightValues
+      // for why that leaves them unchanged by day and brighter by night.
       pointIntensity_{
-          glm::vec4{0.2F, 0.2F, 0.2F, 1.0F},
-          glm::vec4{0.0F, 0.0F, 0.3F, 1.0F},
-          glm::vec4{0.3F, 0.0F, 0.0F, 1.0F},
+          glm::vec4{0.6F, 0.6F, 0.6F, 1.0F},
+          glm::vec4{0.0F, 0.0F, 0.7F, 1.0F},
+          glm::vec4{0.7F, 0.0F, 0.0F, 1.0F},
       } {
 	ambientInterpolator_.setKeyframes(sunColumn([](const SunlightValue& v) { return v.ambient; }));
 	sunIntensityInterpolator_.setKeyframes(
 	    sunColumn([](const SunlightValue& v) { return v.sunIntensity; }));
 	backgroundInterpolator_.setKeyframes(
 	    sunColumn([](const SunlightValue& v) { return v.background; }));
-
-	// One constant keyframe, not looping: the LDR stage divides by 1.0, which
-	// costs nothing and keeps the HDR stage a pure data change.
-	const std::array maxIntensity{glc::Keyframe<float>{.time = 0.0F, .value = 1.0F}};
-	maxIntensityInterpolator_.setKeyframes(maxIntensity, false);
+	maxIntensityInterpolator_.setKeyframes(
+	    sunColumn([](const SunlightValue& v) { return v.maxIntensity; }));
 
 	paths_[0].setWaypoints(kRingPath);
 	paths_[1].setWaypoints(kRightPath);

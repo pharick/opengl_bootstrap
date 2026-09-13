@@ -112,8 +112,9 @@ private:
 	glc::TimedLinearInterpolator<glm::vec4> sunIntensityInterpolator_;
 	glc::TimedLinearInterpolator<glm::vec4> backgroundInterpolator_;
 
-	/// Constant 1.0 until the HDR stage, where dividing by it stops being a
-	/// no-op. Present now so that stage is a data change, not a code change.
+	/// The brightest value the scene can show right now; the fragment shader
+	/// divides by it. 3.0 under the noon sun, 1.0 at night, so the same lamp
+	/// reads three times brighter once the sun is gone.
 	glc::TimedLinearInterpolator<float> maxIntensityInterpolator_;
 
 	std::array<glc::ConstVelLinearInterpolator<glm::vec3>, kNumberOfPointLights> paths_;
