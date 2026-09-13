@@ -11,16 +11,16 @@
 // its silhouette: the mesh is visibly a polyhedron (this chapter's sphere is a
 // coarse one on purpose), the impostor is a perfect disc from any distance.
 //
-// Two impostors are on offer. The basic one (L) assumes every fragment looks
-// straight down -Z, which is only true at the centre of the screen; zoom in on
-// a sphere near the edge of the window and its outline is a circle where the
-// mesh's is an ellipse, and the shading is off. The ray-traced one (J) fires a
-// real ray per fragment and is correct from anywhere -- its square has to be
-// larger to fit the ellipse, and the slider shows what happens when it is not.
-//
-// Both still write the square's depth rather than the sphere's, so an impostor
-// passing through the ground plane is clipped as a square. That is what the
-// chapter fixes last.
+// Three impostors are on offer, one per section of the chapter. The basic one
+// (L) assumes every fragment looks straight down -Z, which is only true at the
+// centre of the screen; zoom in on a sphere near the edge of the window and
+// its outline is a circle where the mesh's is an ellipse, and the shading is
+// off. The ray-traced one (J) fires a real ray per fragment and is correct
+// from anywhere -- its square has to be larger to fit the ellipse, and the
+// slider shows what happens when it is not. Both of those still hand the depth
+// buffer the flat square's depth, so a sphere orbiting through the ground
+// plane is cut off along a straight line; the depth-correct one (H) writes the
+// sphere's own depth from the fragment shader, at the cost of early-z.
 
 #include <glcore/app.hpp>
 #include <glcore/camera.hpp>
@@ -207,18 +207,21 @@ enum class SphereId : std::uint8_t { Blue = 0, Grey, Black, Gold };
 enum class ImpostorKind : std::uint8_t {
 	Basic = 0,   ///< flat mapping: z from Pythagoras, always the +Z hemisphere
 	Perspective, ///< a ray per fragment, intersected with the sphere
+	Depth,       ///< Perspective, plus gl_FragDepth from the intersection
 };
 
-constexpr std::size_t kImpostorKindCount = 2;
+constexpr std::size_t kImpostorKindCount = 3;
 
 constexpr std::array<const char*, kImpostorKindCount> kImpostorShaders{
     "impostor_basic.frag",
     "impostor_persp.frag",
+    "impostor_depth.frag",
 };
 
 constexpr std::array<const char*, kImpostorKindCount> kImpostorLabels{
     "Basic",
     "Ray-traced",
+    "Depth-correct",
 };
 
 constexpr std::size_t kSphereCount = 4;
@@ -257,11 +260,9 @@ protected:
 		unlitProgram_ = &shaders().add(glc::paths::tutorialShader("unlit.vert"),
 		                               glc::paths::tutorialShader("unlit.frag"));
 
-		for (const glc::ReloadableProgram* program :
-		     {meshProgram_, impostorPrograms_[0], impostorPrograms_[1]}) {
-			program->get().bindUniformBlock("Projection", kProjectionBlockBinding);
-			program->get().bindUniformBlock("Light", kLightBlockBinding);
-			program->get().bindUniformBlock("Material", kMaterialBlockBinding);
+		bindLitBlocks(meshProgram_->get());
+		for (const glc::ReloadableProgram* program : impostorPrograms_) {
+			bindLitBlocks(program->get());
 		}
 		unlitProgram_->get().bindUniformBlock("Projection", kProjectionBlockBinding);
 
@@ -310,6 +311,9 @@ protected:
 		}
 		if (input().keyPressed(GLFW_KEY_J)) {
 			impostorKind_ = ImpostorKind::Perspective;
+		}
+		if (input().keyPressed(GLFW_KEY_H)) {
+			impostorKind_ = ImpostorKind::Depth;
 		}
 	}
 
@@ -384,6 +388,13 @@ private:
 	ImpostorKind impostorKind_{ImpostorKind::Basic};
 	float boxCorrection_{kDefaultBoxCorrection};
 	bool drawLight_{true};
+
+	/// Every program that runs the lighting model reads all three blocks.
+	static void bindLitBlocks(const glc::Program& program) {
+		program.bindUniformBlock("Projection", kProjectionBlockBinding);
+		program.bindUniformBlock("Light", kLightBlockBinding);
+		program.bindUniformBlock("Material", kMaterialBlockBinding);
+	}
 
 	/// World-space position of the point light, on a circle at kLightHeight.
 	[[nodiscard]] glm::vec3 lightPosition() const {
@@ -464,9 +475,9 @@ private:
 	}
 
 	/// The basic impostor's mapping doubles as the sphere's own coordinates, so
-	/// it cannot take a margin: the slider only applies to the ray-traced one.
+	/// it cannot take a margin: the slider only applies to the ray-traced ones.
 	[[nodiscard]] float currentBoxCorrection() const {
-		return impostorKind_ == ImpostorKind::Perspective ? boxCorrection_ : 1.0F;
+		return impostorKind_ == ImpostorKind::Basic ? 1.0F : boxCorrection_;
 	}
 
 	/// A sphere circling `orbitCenter` about `orbitAxis`, `orbitAlpha` of the
@@ -510,8 +521,10 @@ private:
 		drawKindRadio(ImpostorKind::Basic, "L");
 		ImGui::SameLine();
 		drawKindRadio(ImpostorKind::Perspective, "J");
+		ImGui::SameLine();
+		drawKindRadio(ImpostorKind::Depth, "H");
 
-		if (impostorKind_ == ImpostorKind::Perspective) {
+		if (impostorKind_ != ImpostorKind::Basic) {
 			// Drag it down to 1.0 and zoom in on a sphere near the window's
 			// edge: the ellipse gets clipped to the square it no longer fits.
 			ImGui::SliderFloat("Box correction", &boxCorrection_, 1.0F, 2.0F, "%.2f");
