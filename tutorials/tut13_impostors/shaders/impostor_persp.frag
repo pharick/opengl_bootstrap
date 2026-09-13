@@ -20,15 +20,20 @@
 // and a sphere half-buried in the ground plane is cut off along a straight
 // line. impostor_depth.frag fixes that.
 
-#include "lighting.glsl"
+#include "material.glsl"
 #include "ray_sphere.glsl"
 
+in vec2 mapping;
+
 out vec4 outputColor;
+
+uniform float sphereRadius;
+uniform vec3 cameraSpherePos;
 
 void main() {
 	vec3 cameraPos;
 	vec3 cameraNormal;
-	impostor(cameraPos, cameraNormal);
+	impostor(mapping, cameraSpherePos, sphereRadius, cameraPos, cameraNormal);
 
-	outputColor = gammaCorrect(accumulateLighting(cameraPos, cameraNormal));
+	outputColor = gammaCorrect(accumulateLighting(Mtl.material, cameraPos, cameraNormal));
 }

@@ -11,10 +11,7 @@
 // a real sphere would show a circle.
 //
 // The fix is to overwrite the depth with the one the ray-traced surface would
-// have had, by running the position through the same pipeline the rasterizer
-// would: camera space -> clip space (projection matrix) -> NDC (divide by w)
-// -> window space (the glDepthRange mapping, which GLSL exposes as
-// gl_DepthRange).
+// have had -- see frag_depth.glsl.
 //
 // It is not free. A fragment shader that writes gl_FragDepth *anywhere*
 // forfeits early depth testing for the whole program: the hardware can no
@@ -24,31 +21,23 @@
 // every path that does not discard -- a fragment that reaches the end without
 // one has undefined depth, not the rasterizer's.
 
-#include "lighting.glsl"
+#include "material.glsl"
 #include "ray_sphere.glsl"
+#include "frag_depth.glsl"
+
+in vec2 mapping;
 
 out vec4 outputColor;
 
-uniform Projection {
-	mat4 cameraToClipMatrix;
-};
-
-/// What gl_FragCoord.z would have been for a fragment at `cameraPos`.
-float windowDepth(in vec3 cameraPos) {
-	vec4 clipPos = cameraToClipMatrix * vec4(cameraPos, 1.0);
-	float ndcDepth = clipPos.z / clipPos.w;
-
-	// glDepthRange(near, far) maps NDC [-1, 1] onto [near, far]. Written the
-	// way the spec states it, with diff = far - near.
-	return ((gl_DepthRange.diff * ndcDepth) + gl_DepthRange.near + gl_DepthRange.far) / 2.0;
-}
+uniform float sphereRadius;
+uniform vec3 cameraSpherePos;
 
 void main() {
 	vec3 cameraPos;
 	vec3 cameraNormal;
-	impostor(cameraPos, cameraNormal);
+	impostor(mapping, cameraSpherePos, sphereRadius, cameraPos, cameraNormal);
 
 	gl_FragDepth = windowDepth(cameraPos);
 
-	outputColor = gammaCorrect(accumulateLighting(cameraPos, cameraNormal));
+	outputColor = gammaCorrect(accumulateLighting(Mtl.material, cameraPos, cameraNormal));
 }

@@ -1,9 +1,10 @@
 #version 330
 
 // Lights a surface whose position and normal were interpolated from vertices.
-// Compare impostor.frag, which feeds the same model a surface it made up.
+// Compare the impostor_*.frag shaders, which feed the same model a surface
+// they made up.
 
-#include "lighting.glsl"
+#include "material.glsl"
 
 in vec3 vertexNormal;
 in vec3 cameraSpacePosition;
@@ -14,5 +15,5 @@ void main() {
 	// Interpolating two unit vectors does not produce a unit vector.
 	vec3 surfaceNormal = normalize(vertexNormal);
 
-	outputColor = gammaCorrect(accumulateLighting(cameraSpacePosition, surfaceNormal));
+	outputColor = gammaCorrect(accumulateLighting(Mtl.material, cameraSpacePosition, surfaceNormal));
 }

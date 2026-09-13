@@ -11,7 +11,7 @@
 // its silhouette: the mesh is visibly a polyhedron (this chapter's sphere is a
 // coarse one on purpose), the impostor is a perfect disc from any distance.
 //
-// Three impostors are on offer, one per section of the chapter. The basic one
+// Four impostors are on offer, one per section of the chapter. The basic one
 // (L) assumes every fragment looks straight down -Z, which is only true at the
 // centre of the screen; zoom in on a sphere near the edge of the window and
 // its outline is a circle where the mesh's is an ellipse, and the shading is
@@ -21,8 +21,16 @@
 // buffer the flat square's depth, so a sphere orbiting through the ground
 // plane is cut off along a straight line; the depth-correct one (H) writes the
 // sphere's own depth from the fragment shader, at the cost of early-z.
+//
+// The last one (K) looks identical to the depth-correct one and is there for
+// what it costs, not what it shows: every sphere in a single draw call. The
+// spheres go into a vertex buffer as points, a geometry shader expands each
+// point into its square, and the fragment shader picks the material out of an
+// array by primitive index. No per-sphere uniforms, no per-sphere buffer
+// binding -- the per-object cost the earlier kinds still paid is gone.
 
 #include <glcore/app.hpp>
+#include <glcore/buffer.hpp>
 #include <glcore/camera.hpp>
 #include <glcore/cycle_timer.hpp>
 #include <glcore/gl_check.hpp>
@@ -31,6 +39,7 @@
 #include <glcore/scoped_bind.hpp>
 #include <glcore/shader_watcher.hpp>
 #include <glcore/uniform_buffer.hpp>
+#include <glcore/vertex_array.hpp>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -47,6 +56,7 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -200,29 +210,9 @@ private:
 };
 
 /// The four spheres, in the order the 1-4 keys and the panel refer to them.
+/// This is also their order in the batched vertex buffer and therefore in the
+/// material array the geometry kind indexes with gl_PrimitiveID.
 enum class SphereId : std::uint8_t { Blue = 0, Grey, Black, Gold };
-
-/// Which fragment shader makes the sphere up. Values index kImpostorShaders
-/// and the program array.
-enum class ImpostorKind : std::uint8_t {
-	Basic = 0,   ///< flat mapping: z from Pythagoras, always the +Z hemisphere
-	Perspective, ///< a ray per fragment, intersected with the sphere
-	Depth,       ///< Perspective, plus gl_FragDepth from the intersection
-};
-
-constexpr std::size_t kImpostorKindCount = 3;
-
-constexpr std::array<const char*, kImpostorKindCount> kImpostorShaders{
-    "impostor_basic.frag",
-    "impostor_persp.frag",
-    "impostor_depth.frag",
-};
-
-constexpr std::array<const char*, kImpostorKindCount> kImpostorLabels{
-    "Basic",
-    "Ray-traced",
-    "Depth-correct",
-};
 
 constexpr std::size_t kSphereCount = 4;
 
@@ -232,6 +222,116 @@ constexpr std::array<const char*, kSphereCount> kSphereLabels{
     "Black marble, left",
     "Gold, right",
 };
+
+/// Which material each sphere wears, in SphereId order.
+constexpr std::array<MaterialId, kSphereCount> kSphereMaterials{
+    MaterialId::BlueShiny,
+    MaterialId::DullGrey,
+    MaterialId::BlackShiny,
+    MaterialId::GoldMetal,
+};
+
+/// One sphere as the geometry kind's vertex shader sees it: attribute 0 is the
+/// centre, attribute 1 the radius, interleaved so a sphere is 16 contiguous
+/// bytes and the stride between spheres is the struct size.
+struct SphereVertex {
+	glm::vec3 cameraPosition;
+	float radius;
+};
+static_assert(sizeof(SphereVertex) == 16);
+
+constexpr GLuint kSpherePositionLocation = 0;
+constexpr GLuint kSphereRadiusLocation = 1;
+
+/// The stride is what makes the interleaving work: it is the distance from
+/// one sphere's attribute to the next sphere's, not to the next attribute.
+/// Zero would mean "tightly packed", which they are not.
+constexpr std::array<glc::AttributeDesc, 2> kSphereAttributes{
+    {
+        {
+            .location = kSpherePositionLocation,
+            .components = 3,
+            .stride = sizeof(SphereVertex),
+            .offset = offsetof(SphereVertex, cameraPosition),
+        },
+        {
+            .location = kSphereRadiusLocation,
+            .components = 1,
+            .stride = sizeof(SphereVertex),
+            .offset = offsetof(SphereVertex, radius),
+        },
+    },
+};
+
+/// The four sphere materials again, packed at 48 bytes rather than at the
+/// 256-byte slots MaterialSet needs for per-draw range binding. The geometry
+/// kind binds this whole buffer once and indexes into it from the shader, so
+/// it wants std140's array stride, not the driver's offset alignment.
+[[nodiscard]] glc::UniformBuffer makeSphereMaterialArray() {
+	std::array<MaterialBlock, kSphereCount> sphereMaterials{};
+	for (std::size_t i = 0; i < kSphereCount; ++i) {
+		sphereMaterials[i] = kMaterials[static_cast<std::size_t>(kSphereMaterials[i])];
+	}
+	glc::UniformBuffer buffer = glc::UniformBuffer::create(sizeof(sphereMaterials), GL_STATIC_DRAW);
+	buffer.update(sphereMaterials);
+	return buffer;
+}
+
+/// How the sphere is made up. Values index kImpostorKinds and the program
+/// array.
+enum class ImpostorKind : std::uint8_t {
+	Basic = 0,   ///< flat mapping: z from Pythagoras, always the +Z hemisphere
+	Perspective, ///< a ray per fragment, intersected with the sphere
+	Depth,       ///< Perspective, plus gl_FragDepth from the intersection
+	Geometry,    ///< Depth, for every sphere at once via a geometry shader
+};
+
+constexpr std::size_t kImpostorKindCount = 4;
+
+struct ImpostorKindInfo {
+	const char* label;
+	const char* key; ///< the book's binding, shown next to the radio
+	const char* vertexShader;
+	const char* geometryShader; ///< nullptr for the two-stage kinds
+	const char* fragmentShader;
+};
+
+constexpr std::array<ImpostorKindInfo, kImpostorKindCount> kImpostorKinds{
+    {
+        {
+            .label = "Basic",
+            .key = "L",
+            .vertexShader = "impostor.vert",
+            .geometryShader = nullptr,
+            .fragmentShader = "impostor_basic.frag",
+        },
+        {
+            .label = "Ray-traced",
+            .key = "J",
+            .vertexShader = "impostor.vert",
+            .geometryShader = nullptr,
+            .fragmentShader = "impostor_persp.frag",
+        },
+        {
+            .label = "Depth-correct",
+            .key = "H",
+            .vertexShader = "impostor.vert",
+            .geometryShader = nullptr,
+            .fragmentShader = "impostor_depth.frag",
+        },
+        {
+            .label = "Geometry batch",
+            .key = "K",
+            .vertexShader = "impostor_geom.vert",
+            .geometryShader = "impostor_geom.geom",
+            .fragmentShader = "impostor_geom.frag",
+        },
+    },
+};
+
+[[nodiscard]] const ImpostorKindInfo& kindInfo(ImpostorKind kind) {
+	return kImpostorKinds[static_cast<std::size_t>(kind)];
+}
 
 class Impostors final : public glc::App {
 public:
@@ -252,10 +352,8 @@ protected:
 
 		meshProgram_ = &shaders().add(glc::paths::tutorialShader("mesh.vert"),
 		                              glc::paths::tutorialShader("mesh.frag"));
-		// One vertex shader for every impostor; only the fragment stage differs.
 		for (std::size_t i = 0; i < kImpostorKindCount; ++i) {
-			impostorPrograms_[i] = &shaders().add(glc::paths::tutorialShader("impostor.vert"),
-			                                      glc::paths::tutorialShader(kImpostorShaders[i]));
+			impostorPrograms_[i] = &shaders().add(impostorSources(kImpostorKinds[i]));
 		}
 		unlitProgram_ = &shaders().add(glc::paths::tutorialShader("unlit.vert"),
 		                               glc::paths::tutorialShader("unlit.frag"));
@@ -277,6 +375,12 @@ protected:
 		// shader gets four invocations from glDrawArrays and reads gl_VertexID;
 		// there is no buffer for it to read anything else from.
 		impostorVao_ = glc::VertexArray::create();
+
+		// The geometry kind's spheres, by contrast, are ordinary vertex data:
+		// one SphereVertex per sphere, rewritten every frame (hence STREAM).
+		batchVbo_ = glc::Buffer::create();
+		glc::bufferData(batchVbo_, GL_ARRAY_BUFFER, nullptr, sizeof(batch_), GL_STREAM_DRAW);
+		batchVao_ = glc::makeVertexArray(batchVbo_, kSphereAttributes);
 	}
 
 	void onResize(int /*width*/, int /*height*/) override {
@@ -315,6 +419,9 @@ protected:
 		if (input().keyPressed(GLFW_KEY_H)) {
 			impostorKind_ = ImpostorKind::Depth;
 		}
+		if (input().keyPressed(GLFW_KEY_K)) {
+			impostorKind_ = ImpostorKind::Geometry;
+		}
 	}
 
 	void onGui() override {
@@ -346,13 +453,21 @@ protected:
 
 		const float alpha = orbitTimer_.alpha();
 
-		drawSphere(stack, {0.0F, 10.0F, 0.0F}, 4.0F, MaterialId::BlueShiny, SphereId::Blue);
+		// Every slot starts out as "not this frame"; the geometry kind's
+		// drawSphere fills in the ones it wants drawn.
+		batch_.fill({});
+
+		drawSphere(stack, {0.0F, 10.0F, 0.0F}, 4.0F, SphereId::Blue);
 		drawSphereOrbit(stack, {0.0F, 10.0F, 0.0F}, {0.6F, 0.8F, 0.0F}, 20.0F, alpha, 2.0F,
-		                MaterialId::DullGrey, SphereId::Grey);
+		                SphereId::Grey);
 		drawSphereOrbit(stack, {-10.0F, 1.0F, 0.0F}, {0.0F, 1.0F, 0.0F}, 10.0F, alpha, 1.0F,
-		                MaterialId::BlackShiny, SphereId::Black);
+		                SphereId::Black);
 		drawSphereOrbit(stack, {10.0F, 1.0F, 0.0F}, {0.0F, 1.0F, 0.0F}, 10.0F, alpha * 2.0F, 1.0F,
-		                MaterialId::GoldMetal, SphereId::Gold);
+		                SphereId::Gold);
+
+		if (impostorKind_ == ImpostorKind::Geometry) {
+			drawSphereBatch();
+		}
 
 		if (drawLight_) {
 			const glc::MatrixStack::Frame lightFrame = stack.push();
@@ -378,16 +493,35 @@ private:
 	glc::UniformBuffer projectionBlock_{glc::UniformBuffer::forType<ProjectionBlock>()};
 	glc::UniformBuffer lightBlock_{glc::UniformBuffer::forType<LightBlock>()};
 	MaterialSet materials_;
+	glc::UniformBuffer sphereMaterialArray_{makeSphereMaterialArray()};
 
 	glc::Mesh groundMesh_;
 	glc::Mesh sphereMesh_;
 	glc::Mesh cubeMesh_;
 	glc::VertexArray impostorVao_;
 
+	glc::Buffer batchVbo_;
+	glc::VertexArray batchVao_;
+	std::array<SphereVertex, kSphereCount> batch_{};
+
 	std::array<bool, kSphereCount> drawImpostor_{};
 	ImpostorKind impostorKind_{ImpostorKind::Basic};
 	float boxCorrection_{kDefaultBoxCorrection};
 	bool drawLight_{true};
+
+	/// The stages that make up one impostor kind, ready for the watcher.
+	[[nodiscard]] static std::vector<glc::ShaderSource>
+	impostorSources(const ImpostorKindInfo& info) {
+		std::vector<glc::ShaderSource> sources{
+		    {.stage = GL_VERTEX_SHADER, .path = glc::paths::tutorialShader(info.vertexShader)},
+		    {.stage = GL_FRAGMENT_SHADER, .path = glc::paths::tutorialShader(info.fragmentShader)},
+		};
+		if (info.geometryShader != nullptr) {
+			sources.emplace_back(GL_GEOMETRY_SHADER,
+			                     glc::paths::tutorialShader(info.geometryShader));
+		}
+		return sources;
+	}
 
 	/// Every program that runs the lighting model reads all three blocks.
 	static void bindLitBlocks(const glc::Program& program) {
@@ -448,10 +582,14 @@ private:
 	/// The impostor path needs no model matrix at all: the vertex shader builds
 	/// the square in camera space, so all it wants is the centre in camera
 	/// space, the radius and how much margin to draw. That is the entire
-	/// per-object cost.
+	/// per-object cost -- and for the geometry kind, even that is deferred:
+	/// the sphere is only recorded here, and drawn with the others later.
 	void drawSphere(glc::MatrixStack& stack, const glm::vec3& position, float radius,
-	                MaterialId materialId, SphereId sphereId) {
-		if (!drawImpostor_[static_cast<std::size_t>(sphereId)]) {
+	                SphereId sphereId) {
+		const auto index = static_cast<std::size_t>(sphereId);
+		const MaterialId materialId = kSphereMaterials[index];
+
+		if (!drawImpostor_[index]) {
 			const glc::MatrixStack::Frame sphereFrame = stack.push();
 			stack.Translate(position);
 			stack.Scale(radius * kUnitSphereDiameter);
@@ -459,12 +597,16 @@ private:
 			return;
 		}
 
-		materials_.bind(kMaterialBlockBinding, materialId);
-
 		const glm::vec3 cameraSpherePos{stack.Top() * glm::vec4{position, 1.0F}};
 
-		const glc::Program& program =
-		    impostorPrograms_[static_cast<std::size_t>(impostorKind_)]->get();
+		if (impostorKind_ == ImpostorKind::Geometry) {
+			batch_[index] = {.cameraPosition = cameraSpherePos, .radius = radius};
+			return;
+		}
+
+		materials_.bind(kMaterialBlockBinding, materialId);
+
+		const glc::Program& program = currentImpostorProgram();
 		program.use();
 		program.set("cameraSpherePos", cameraSpherePos);
 		program.set("sphereRadius", radius);
@@ -472,6 +614,30 @@ private:
 
 		const glc::ScopedBind bind{impostorVao_};
 		GLC_CHECK(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+	}
+
+	/// Every sphere the geometry kind recorded this frame, in one draw.
+	///
+	/// All four slots are always sent; a sphere drawn as a mesh this frame has
+	/// radius 0 and the geometry shader emits nothing for it. That keeps the
+	/// vertex index equal to the SphereId, which is what makes the primitive
+	/// index a valid index into the material array -- compacting the batch
+	/// would break that, and a four-vertex draw is not worth saving a vertex on.
+	void drawSphereBatch() {
+		glc::bufferSubData(batchVbo_, GL_ARRAY_BUFFER, 0, batch_.data(), sizeof(batch_));
+
+		sphereMaterialArray_.bindToPoint(kMaterialBlockBinding);
+
+		const glc::Program& program = currentImpostorProgram();
+		program.use();
+		program.set("boxCorrection", currentBoxCorrection());
+
+		const glc::ScopedBind bind{batchVao_};
+		GLC_CHECK(glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(kSphereCount)));
+	}
+
+	[[nodiscard]] const glc::Program& currentImpostorProgram() const {
+		return impostorPrograms_[static_cast<std::size_t>(impostorKind_)]->get();
 	}
 
 	/// The basic impostor's mapping doubles as the sphere's own coordinates, so
@@ -485,7 +651,7 @@ private:
 	/// lands -- or with world right, for an axis that *is* world up.
 	void drawSphereOrbit(glc::MatrixStack& stack, const glm::vec3& orbitCenter,
 	                     const glm::vec3& orbitAxis, float orbitRadius, float orbitAlpha,
-	                     float sphereRadius, MaterialId materialId, SphereId sphereId) {
+	                     float sphereRadius, SphereId sphereId) {
 		const glc::MatrixStack::Frame orbitFrame = stack.push();
 
 		stack.Translate(orbitCenter);
@@ -497,7 +663,7 @@ private:
 		}
 		stack.Translate(glm::normalize(offsetDir) * orbitRadius);
 
-		drawSphere(stack, glm::vec3{0.0F}, sphereRadius, materialId, sphereId);
+		drawSphere(stack, glm::vec3{0.0F}, sphereRadius, sphereId);
 	}
 
 	void drawSphereControls() {
@@ -518,11 +684,9 @@ private:
 		}
 
 		ImGui::SeparatorText("Impostor kind");
-		drawKindRadio(ImpostorKind::Basic, "L");
-		ImGui::SameLine();
-		drawKindRadio(ImpostorKind::Perspective, "J");
-		ImGui::SameLine();
-		drawKindRadio(ImpostorKind::Depth, "H");
+		for (std::size_t i = 0; i < kImpostorKindCount; ++i) {
+			drawKindRadio(static_cast<ImpostorKind>(i));
+		}
 
 		if (impostorKind_ != ImpostorKind::Basic) {
 			// Drag it down to 1.0 and zoom in on a sphere near the window's
@@ -535,13 +699,13 @@ private:
 		ImGui::TextDisabled("(G)");
 	}
 
-	void drawKindRadio(ImpostorKind kind, const char* key) {
-		if (ImGui::RadioButton(kImpostorLabels[static_cast<std::size_t>(kind)],
-		                       impostorKind_ == kind)) {
+	void drawKindRadio(ImpostorKind kind) {
+		const ImpostorKindInfo& info = kindInfo(kind);
+		if (ImGui::RadioButton(info.label, impostorKind_ == kind)) {
 			impostorKind_ = kind;
 		}
 		ImGui::SameLine();
-		ImGui::TextDisabled("(%s)", key);
+		ImGui::TextDisabled("(%s)", info.key);
 	}
 
 	/// Seeded from the timer every frame so the widgets track it and become

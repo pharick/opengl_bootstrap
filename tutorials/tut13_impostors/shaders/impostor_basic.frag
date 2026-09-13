@@ -14,7 +14,7 @@
 // impostor_persp.frag for the fix. And the depth values are the square's, not
 // the sphere's, which is what the chapter fixes after that.
 
-#include "lighting.glsl"
+#include "material.glsl"
 
 in vec2 mapping;
 
@@ -43,5 +43,5 @@ void main() {
 	vec3 cameraNormal;
 	impostor(cameraPos, cameraNormal);
 
-	outputColor = gammaCorrect(accumulateLighting(cameraPos, cameraNormal));
+	outputColor = gammaCorrect(accumulateLighting(Mtl.material, cameraPos, cameraNormal));
 }

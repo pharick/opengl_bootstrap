@@ -1,13 +1,15 @@
-// The lighting model for this chapter, shared by mesh.frag and impostor.frag.
+// The lighting model for this chapter, shared by every lit fragment shader.
 //
-// The book has it twice (Lighting.frag and BasicImpostor.frag), with the only
-// difference being where the surface position and normal come from: a vertex
-// shader in one case, a per-fragment calculation in the other. The model itself
-// does not care, so it lives here and takes both as arguments.
+// The book has it in each of them, with the only difference being where the
+// surface position and normal come from: a vertex shader in one case, a
+// per-fragment calculation in the other. The model itself does not care, so
+// it lives here and takes both as arguments.
 //
-// The uniform blocks are declared here too, since the functions read them.
-// Including this file therefore commits a shader to the Light and Material
-// block layouts that main.cpp uploads.
+// The material is an argument too, rather than a block read from inside, so
+// that the same code works whether the shader has one material bound
+// (material.glsl) or picks one out of an array per primitive
+// (impostor_geom.frag). The Light block is declared here since nothing varies
+// about it.
 
 #ifndef TUT13_LIGHTING_GLSL
 #define TUT13_LIGHTING_GLSL
@@ -15,6 +17,15 @@
 #include <common/specular.glsl>
 
 layout(std140) uniform;
+
+/// One material, as both the single-material block and the array block hold
+/// it. std140 pads the trailing float to 16 bytes, so the C++ mirror is 48
+/// bytes and so is an array element.
+struct MaterialEntry {
+	vec4 diffuseColor;
+	vec4 specularColor;
+	float specularShininess;
+};
 
 struct PerLight {
 	vec4 cameraSpaceLightPos;
@@ -30,13 +41,6 @@ uniform Light {
 }
 Lgt;
 
-uniform Material {
-	vec4 diffuseColor;
-	vec4 specularColor;
-	float specularShininess;
-}
-Mtl;
-
 float calcAttenuation(in vec3 cameraSpacePosition, in vec3 cameraSpaceLightPos,
                       out vec3 lightDirection) {
 	vec3 lightDifference = cameraSpaceLightPos - cameraSpacePosition;
@@ -47,7 +51,8 @@ float calcAttenuation(in vec3 cameraSpacePosition, in vec3 cameraSpaceLightPos,
 
 /// Diffuse plus Gaussian specular from one light, at a camera-space point with
 /// a unit-length camera-space normal. Same model as tut12, minus tone mapping.
-vec4 computeLighting(in PerLight light, in vec3 cameraSpacePosition, in vec3 surfaceNormal) {
+vec4 computeLighting(in PerLight light, in MaterialEntry material, in vec3 cameraSpacePosition,
+                     in vec3 surfaceNormal) {
 	vec3 lightDirection;
 	vec4 lightIntensity;
 
@@ -67,22 +72,24 @@ vec4 computeLighting(in PerLight light, in vec3 cameraSpacePosition, in vec3 sur
 	vec3 dirToViewer = normalize(-cameraSpacePosition);
 
 	float specularTerm =
-	    gaussianTerm(surfaceNormal, lightDirection, dirToViewer, Mtl.specularShininess);
+	    gaussianTerm(surfaceNormal, lightDirection, dirToViewer, material.specularShininess);
 
 	// No highlight on a surface that faces away from the lamp.
 	specularTerm = cosAngIncidence > 0.0 ? specularTerm : 0.0;
 
-	return (Mtl.diffuseColor * lightIntensity * cosAngIncidence) +
-	    (Mtl.specularColor * lightIntensity * specularTerm);
+	return (material.diffuseColor * lightIntensity * cosAngIncidence) +
+	    (material.specularColor * lightIntensity * specularTerm);
 }
 
 /// Ambient plus every light in the block. `surfaceNormal` must be unit length;
 /// the caller knows whether it came from interpolation (and needs normalizing)
-/// or was constructed on the unit sphere (and does not).
-vec4 accumulateLighting(in vec3 cameraSpacePosition, in vec3 surfaceNormal) {
-	vec4 accumLighting = Mtl.diffuseColor * Lgt.ambientIntensity;
+/// or was constructed on the sphere (and does not).
+vec4 accumulateLighting(in MaterialEntry material, in vec3 cameraSpacePosition,
+                        in vec3 surfaceNormal) {
+	vec4 accumLighting = material.diffuseColor * Lgt.ambientIntensity;
 	for (int light = 0; light < numberOfLights; ++light) {
-		accumLighting += computeLighting(Lgt.lights[light], cameraSpacePosition, surfaceNormal);
+		accumLighting +=
+		    computeLighting(Lgt.lights[light], material, cameraSpacePosition, surfaceNormal);
 	}
 	return accumLighting;
 }
