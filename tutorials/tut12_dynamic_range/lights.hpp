@@ -37,6 +37,16 @@ static_assert(sizeof(LightBlock) == 160);
 /// 3 keys.
 enum class TimerScope : std::uint8_t { Sun, PointLights, All };
 
+/// gltut's three authored lighting tables, one per stage of the chapter. Each
+/// is tuned for the display pipeline of its stage, so pairing a table with the
+/// wrong pipeline (Gamma values with gamma off, say) is a legitimate thing to
+/// look at, not an error.
+enum class LightingEnvironment : std::uint8_t {
+	Ldr,   ///< every value in [0, 1], maxIntensity 1.0: no tone-mapping
+	Hdr,   ///< sun up to 1.8, maxIntensity follows the sun
+	Gamma, ///< sun 6.5, maxIntensity up to 10; assumes gamma correction is on
+};
+
 /// The day/night cycle: one sun on a 30-second loop plus three point lights on
 /// loops of their own, all authored in world space and converted on demand.
 ///
@@ -85,11 +95,10 @@ public:
 	[[nodiscard]] glm::vec3 pointLightPosition(std::size_t index) const;
 	[[nodiscard]] glm::vec4 pointLightIntensity(std::size_t index) const;
 
-	/// Swaps between gltut's two lighting environments. LDR keeps every value
-	/// within [0, 1]; HDR lets the sun exceed it and tone-maps back down. The
-	/// timers are untouched, so flipping mid-day compares the same moment.
-	void setHdr(bool hdr);
-	[[nodiscard]] bool isHdr() const noexcept;
+	/// Swaps the authored tables. The timers are untouched, so flipping mid-day
+	/// compares the same moment under different lighting.
+	void setEnvironment(LightingEnvironment environment);
+	[[nodiscard]] LightingEnvironment environment() const noexcept;
 
 	// Timer control. Scrubbing works while paused, which is the point of it.
 
@@ -124,14 +133,14 @@ private:
 	glc::TimedLinearInterpolator<glm::vec4> sunIntensityInterpolator_;
 	glc::TimedLinearInterpolator<glm::vec4> backgroundInterpolator_;
 
-	/// 3.0 under the HDR noon sun, 1.0 at night, so the same lamp reads three
-	/// times brighter once the sun is gone.
+	/// Falls with the sun (3.0 at HDR noon, 1.0 at night), so the same lamp
+	/// reads three times brighter once the sun is gone.
 	glc::TimedLinearInterpolator<float> maxIntensityInterpolator_;
 
 	std::array<glc::ConstVelLinearInterpolator<glm::vec3>, kNumberOfPointLights> paths_;
 	std::array<glc::CycleTimer, kNumberOfPointLights> pointTimers_;
 	std::array<glm::vec4, kNumberOfPointLights> pointIntensity_{};
 
-	bool hdr_{true};
+	LightingEnvironment environment_{LightingEnvironment::Gamma};
 	float halfBrightnessDistance_{70.0F};
 };

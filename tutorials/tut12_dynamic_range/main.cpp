@@ -47,6 +47,14 @@ constexpr float kTetraSpinSeconds = 2.5F;
 /// 220-unit scene are single pixels. Big enough to aim at instead.
 constexpr float kPointMarkerScale = 3.0F;
 
+/// The curve a typical monitor applies to its input. Correction raises to the
+/// reciprocal so the two cancel and linear light reaches the eye as linear.
+constexpr float kDisplayGamma = 2.2F;
+
+/// pow(x, 1/1) is the identity, so "off" is not a separate code path -- every
+/// site that corrects keeps correcting, by nothing.
+constexpr float kGammaOff = 1.0F;
+
 /// Readout labels, in LightManager's point-light order (see the paths in
 /// lights.cpp).
 constexpr std::array<const char*, kNumberOfPointLights> kPointLightLabels{
@@ -240,7 +248,7 @@ protected:
 			stack.Translate(lightsManager_.sunDirection() * kSunMarkerDistance);
 			stack.Scale(kSunMarkerScale);
 
-			drawMarker(lightsManager_.sunIntensity());
+			drawMarker(displayColor(lightsManager_.sunIntensity()));
 		}
 
 		for (std::size_t i = 0; i < kNumberOfPointLights; ++i) {
@@ -249,8 +257,17 @@ protected:
 			stack.Translate(lightsManager_.pointLightPosition(i));
 			stack.Scale(kPointMarkerScale);
 
-			drawMarker(lightsManager_.pointLightIntensity(i));
+			drawMarker(displayColor(lightsManager_.pointLightIntensity(i)));
 		}
+	}
+
+	/// What a white surface facing `intensity` at zero distance would show:
+	/// the same tone-map and gamma steps lit.frag applies, done on the CPU. The
+	/// markers and the UI swatches both go through here so they cannot drift
+	/// apart from each other or from the terrain.
+	[[nodiscard]] glm::vec4 displayColor(const glm::vec4& intensity) const {
+		const glm::vec3 toneMapped = glm::vec3{intensity} / lightsManager_.maxIntensity();
+		return gammaCorrect(glm::vec4{toneMapped, intensity.a});
 	}
 
 	/// Separate from drawObject because the unlit program has no normal matrix,
@@ -259,7 +276,7 @@ protected:
 		const glc::Program& program = unlitProgram_->get();
 		program.use();
 		program.set("modelToCameraMatrix", matrices().Top());
-		program.set("objectColor", gammaCorrect(color));
+		program.set("objectColor", color);
 		sphereMesh_.render("flat");
 	}
 
@@ -275,7 +292,7 @@ private:
 	glc::ReloadableProgram* litMaterialProgram_{};
 
 	bool drawLights_{true};
-	float gamma_{2.2F};
+	float gamma_{kDisplayGamma};
 
 	glc::UniformBuffer projectionBlock_{glc::UniformBuffer::forType<ProjectionBlock>()};
 	glc::UniformBuffer lightBlock_{glc::UniformBuffer::forType<LightBlock>()};
@@ -341,11 +358,25 @@ private:
 	}
 
 	void drawLightingControls() {
-		bool hdr = lightsManager_.isHdr();
-		if (ImGui::Checkbox("HDR", &hdr)) {
-			lightsManager_.setHdr(hdr);
-		}
+		// The three tables and the gamma switch are independent on purpose: the
+		// book's comparison is "Gamma table with gamma on" against "HDR table
+		// with gamma off", and the mismatched pairs show why each was re-tuned.
+		drawEnvironmentRadio("LDR", LightingEnvironment::Ldr);
 		ImGui::SameLine();
+		drawEnvironmentRadio("HDR", LightingEnvironment::Hdr);
+		ImGui::SameLine();
+		drawEnvironmentRadio("Gamma", LightingEnvironment::Gamma);
+
+		bool gammaOn = gamma_ != kGammaOff;
+		if (ImGui::Checkbox("Gamma correction", &gammaOn)) {
+			gamma_ = gammaOn ? kDisplayGamma : kGammaOff;
+		}
+		if (gammaOn) {
+			ImGui::SameLine();
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0F);
+			ImGui::SliderFloat("##gamma", &gamma_, 1.0F, 3.0F, "%.2f");
+		}
+
 		ImGui::Checkbox("Show light markers", &drawLights_);
 
 		float halfDistance = lightsManager_.halfBrightnessDistance();
@@ -365,11 +396,16 @@ private:
 		}
 	}
 
-	/// One "label  r g b" line with a swatch of the colour as it would be
-	/// tone-mapped right now, so anything above maxIntensity reads as clipped.
+	void drawEnvironmentRadio(const char* label, LightingEnvironment environment) {
+		if (ImGui::RadioButton(label, lightsManager_.environment() == environment)) {
+			lightsManager_.setEnvironment(environment);
+		}
+	}
+
+	/// One "label  r g b" line with a swatch of the colour as the screen would
+	/// show it right now, so anything above maxIntensity reads as clipped.
 	void drawIntensityRow(const char* label, const glm::vec4& intensity) {
-		const float maxIntensity = lightsManager_.maxIntensity();
-		const glm::vec3 mapped = glm::vec3{intensity} / maxIntensity;
+		const glm::vec4 mapped = displayColor(intensity);
 		ImGui::ColorButton(label, ImVec4{mapped.r, mapped.g, mapped.b, 1.0F},
 		                   ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoAlpha,
 		                   ImVec2{ImGui::GetFrameHeight(), ImGui::GetFrameHeight()});
@@ -395,8 +431,8 @@ private:
 		if (ImGui::Button("Copy as FlyController{...}")) {
 			ImGui::SetClipboardText(
 			    std::format("glc::FlyController fly_{{{{{:.1f}F, {:.1f}F, {:.1f}F}}, {:.1f}F, "
-			                "{:.1f}F}};",
-			                position.x, position.y, position.z, fly_.yaw(), fly_.pitch())
+				            "{:.1f}F}};",
+				            position.x, position.y, position.z, fly_.yaw(), fly_.pitch())
 			        .c_str());
 		}
 	}
