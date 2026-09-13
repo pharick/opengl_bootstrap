@@ -9,9 +9,10 @@
 // What is left is a disc of fragments carrying the position and normal a real
 // sphere would have had, and the lighting model cannot tell the difference.
 //
-// The lie is in the geometry, not just the shading: the square's depth values
-// are those of the square, not of the sphere. That is what the rest of the
-// chapter fixes.
+// Two lies remain. The "ray" here is assumed to travel straight down -Z for
+// every fragment, which is only true at the centre of the screen -- see
+// impostor_persp.frag for the fix. And the depth values are the square's, not
+// the sphere's, which is what the chapter fixes after that.
 
 #include "lighting.glsl"
 

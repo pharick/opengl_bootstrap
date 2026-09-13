@@ -1,4 +1,4 @@
-// Tutorial 13 (Lies and Impostors), first part: the basic sphere impostor.
+// Tutorial 13 (Lies and Impostors): sphere impostors.
 //
 // Every chapter so far has lit a mesh. This one lights a surface that has no
 // mesh at all: each sphere can be drawn either as gltut's UnitSphere or as a
@@ -10,9 +10,17 @@
 // Toggle a sphere between the two with the 1-4 keys or the panel, and look at
 // its silhouette: the mesh is visibly a polyhedron (this chapter's sphere is a
 // coarse one on purpose), the impostor is a perfect disc from any distance.
-// Then move the camera off to the side and watch the impostor pass through the
-// ground plane -- its depth is the square's, not the sphere's. That is the flaw
-// the rest of the chapter is about.
+//
+// Two impostors are on offer. The basic one (L) assumes every fragment looks
+// straight down -Z, which is only true at the centre of the screen; zoom in on
+// a sphere near the edge of the window and its outline is a circle where the
+// mesh's is an ellipse, and the shading is off. The ray-traced one (J) fires a
+// real ray per fragment and is correct from anywhere -- its square has to be
+// larger to fit the ellipse, and the slider shows what happens when it is not.
+//
+// Both still write the square's depth rather than the sphere's, so an impostor
+// passing through the ground plane is clipped as a square. That is what the
+// chapter fixes last.
 
 #include <glcore/app.hpp>
 #include <glcore/camera.hpp>
@@ -66,6 +74,14 @@ constexpr float kGroundScale = 60.0F;
 constexpr float kUnitSphereDiameter = 2.0F;
 
 constexpr float kLightMarkerScale = 0.5F;
+
+/// How much wider than the sphere's bounding box the ray-traced impostor's
+/// square is drawn. Under perspective the outline is an ellipse that spills
+/// past the box on the side away from the screen centre; 1.5 covers it for any
+/// reasonable field of view without working out the exact projected bounds.
+/// The basic impostor is only right at exactly 1.0 -- its mapping is the
+/// sphere's own coordinates, so a larger square just draws a larger disc.
+constexpr float kDefaultBoxCorrection = 1.5F;
 
 struct ProjectionBlock {
 	glm::mat4 cameraToClipMatrix;
@@ -186,6 +202,25 @@ private:
 /// The four spheres, in the order the 1-4 keys and the panel refer to them.
 enum class SphereId : std::uint8_t { Blue = 0, Grey, Black, Gold };
 
+/// Which fragment shader makes the sphere up. Values index kImpostorShaders
+/// and the program array.
+enum class ImpostorKind : std::uint8_t {
+	Basic = 0,   ///< flat mapping: z from Pythagoras, always the +Z hemisphere
+	Perspective, ///< a ray per fragment, intersected with the sphere
+};
+
+constexpr std::size_t kImpostorKindCount = 2;
+
+constexpr std::array<const char*, kImpostorKindCount> kImpostorShaders{
+    "impostor_basic.frag",
+    "impostor_persp.frag",
+};
+
+constexpr std::array<const char*, kImpostorKindCount> kImpostorLabels{
+    "Basic",
+    "Ray-traced",
+};
+
 constexpr std::size_t kSphereCount = 4;
 
 constexpr std::array<const char*, kSphereCount> kSphereLabels{
@@ -214,12 +249,16 @@ protected:
 
 		meshProgram_ = &shaders().add(glc::paths::tutorialShader("mesh.vert"),
 		                              glc::paths::tutorialShader("mesh.frag"));
-		impostorProgram_ = &shaders().add(glc::paths::tutorialShader("impostor.vert"),
-		                                  glc::paths::tutorialShader("impostor.frag"));
+		// One vertex shader for every impostor; only the fragment stage differs.
+		for (std::size_t i = 0; i < kImpostorKindCount; ++i) {
+			impostorPrograms_[i] = &shaders().add(glc::paths::tutorialShader("impostor.vert"),
+			                                      glc::paths::tutorialShader(kImpostorShaders[i]));
+		}
 		unlitProgram_ = &shaders().add(glc::paths::tutorialShader("unlit.vert"),
 		                               glc::paths::tutorialShader("unlit.frag"));
 
-		for (const glc::ReloadableProgram* program : {meshProgram_, impostorProgram_}) {
+		for (const glc::ReloadableProgram* program :
+		     {meshProgram_, impostorPrograms_[0], impostorPrograms_[1]}) {
 			program->get().bindUniformBlock("Projection", kProjectionBlockBinding);
 			program->get().bindUniformBlock("Light", kLightBlockBinding);
 			program->get().bindUniformBlock("Material", kMaterialBlockBinding);
@@ -265,6 +304,12 @@ protected:
 		}
 		if (input().keyPressed(GLFW_KEY_G)) {
 			drawLight_ = !drawLight_;
+		}
+		if (input().keyPressed(GLFW_KEY_L)) {
+			impostorKind_ = ImpostorKind::Basic;
+		}
+		if (input().keyPressed(GLFW_KEY_J)) {
+			impostorKind_ = ImpostorKind::Perspective;
 		}
 	}
 
@@ -323,7 +368,7 @@ private:
 	glc::CycleTimer orbitTimer_{kOrbitSeconds};
 
 	glc::ReloadableProgram* meshProgram_{};
-	glc::ReloadableProgram* impostorProgram_{};
+	std::array<glc::ReloadableProgram*, kImpostorKindCount> impostorPrograms_{};
 	glc::ReloadableProgram* unlitProgram_{};
 
 	glc::UniformBuffer projectionBlock_{glc::UniformBuffer::forType<ProjectionBlock>()};
@@ -336,6 +381,8 @@ private:
 	glc::VertexArray impostorVao_;
 
 	std::array<bool, kSphereCount> drawImpostor_{};
+	ImpostorKind impostorKind_{ImpostorKind::Basic};
+	float boxCorrection_{kDefaultBoxCorrection};
 	bool drawLight_{true};
 
 	/// World-space position of the point light, on a circle at kLightHeight.
@@ -389,7 +436,8 @@ private:
 	///
 	/// The impostor path needs no model matrix at all: the vertex shader builds
 	/// the square in camera space, so all it wants is the centre in camera
-	/// space and the radius. That is the entire per-object cost.
+	/// space, the radius and how much margin to draw. That is the entire
+	/// per-object cost.
 	void drawSphere(glc::MatrixStack& stack, const glm::vec3& position, float radius,
 	                MaterialId materialId, SphereId sphereId) {
 		if (!drawImpostor_[static_cast<std::size_t>(sphereId)]) {
@@ -404,13 +452,21 @@ private:
 
 		const glm::vec3 cameraSpherePos{stack.Top() * glm::vec4{position, 1.0F}};
 
-		const glc::Program& program = impostorProgram_->get();
+		const glc::Program& program =
+		    impostorPrograms_[static_cast<std::size_t>(impostorKind_)]->get();
 		program.use();
 		program.set("cameraSpherePos", cameraSpherePos);
 		program.set("sphereRadius", radius);
+		program.set("boxCorrection", currentBoxCorrection());
 
 		const glc::ScopedBind bind{impostorVao_};
 		GLC_CHECK(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+	}
+
+	/// The basic impostor's mapping doubles as the sphere's own coordinates, so
+	/// it cannot take a margin: the slider only applies to the ray-traced one.
+	[[nodiscard]] float currentBoxCorrection() const {
+		return impostorKind_ == ImpostorKind::Perspective ? boxCorrection_ : 1.0F;
 	}
 
 	/// A sphere circling `orbitCenter` about `orbitAxis`, `orbitAlpha` of the
@@ -450,9 +506,29 @@ private:
 			drawImpostor_.fill(false);
 		}
 
+		ImGui::SeparatorText("Impostor kind");
+		drawKindRadio(ImpostorKind::Basic, "L");
+		ImGui::SameLine();
+		drawKindRadio(ImpostorKind::Perspective, "J");
+
+		if (impostorKind_ == ImpostorKind::Perspective) {
+			// Drag it down to 1.0 and zoom in on a sphere near the window's
+			// edge: the ellipse gets clipped to the square it no longer fits.
+			ImGui::SliderFloat("Box correction", &boxCorrection_, 1.0F, 2.0F, "%.2f");
+		}
+
 		ImGui::Checkbox("Show light marker", &drawLight_);
 		ImGui::SameLine();
 		ImGui::TextDisabled("(G)");
+	}
+
+	void drawKindRadio(ImpostorKind kind, const char* key) {
+		if (ImGui::RadioButton(kImpostorLabels[static_cast<std::size_t>(kind)],
+		                       impostorKind_ == kind)) {
+			impostorKind_ = kind;
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("(%s)", key);
 	}
 
 	/// Seeded from the timer every frame so the widgets track it and become

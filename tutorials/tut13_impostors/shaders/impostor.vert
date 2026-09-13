@@ -11,6 +11,13 @@
 // The corner order (bottom-left, top-left, bottom-right, top-right) makes the
 // strip's first triangle wind clockwise on screen, which is the front face for
 // gltut's meshes and therefore for this program's cull state too.
+//
+// Shared by every impostor fragment shader in this chapter. They differ in how
+// much square they need: the basic one wants exactly the sphere's bounding
+// box, the ray-traced one wants more, because under perspective a sphere's
+// outline is an ellipse that spills past the box on the side away from the
+// screen centre. boxCorrection scales both the square and the mapping, so a
+// fragment's mapping still measures sphere radii from the centre.
 
 layout(std140) uniform;
 
@@ -22,30 +29,29 @@ uniform Projection {
 
 uniform float sphereRadius;
 uniform vec3 cameraSpherePos;
+uniform float boxCorrection;
 
 void main() {
-	vec2 offset;
+	vec2 corner;
 	switch (gl_VertexID) {
 	case 0:
-		mapping = vec2(-1.0, -1.0);
-		offset = vec2(-sphereRadius, -sphereRadius);
+		corner = vec2(-1.0, -1.0);
 		break;
 	case 1:
-		mapping = vec2(-1.0, 1.0);
-		offset = vec2(-sphereRadius, sphereRadius);
+		corner = vec2(-1.0, 1.0);
 		break;
 	case 2:
-		mapping = vec2(1.0, -1.0);
-		offset = vec2(sphereRadius, -sphereRadius);
+		corner = vec2(1.0, -1.0);
 		break;
 	case 3:
-		mapping = vec2(1.0, 1.0);
-		offset = vec2(sphereRadius, sphereRadius);
+		corner = vec2(1.0, 1.0);
 		break;
 	}
 
+	mapping = corner * boxCorrection;
+
 	vec4 cameraCornerPos = vec4(cameraSpherePos, 1.0);
-	cameraCornerPos.xy += offset;
+	cameraCornerPos.xy += mapping * sphereRadius;
 
 	gl_Position = cameraToClipMatrix * cameraCornerPos;
 }
