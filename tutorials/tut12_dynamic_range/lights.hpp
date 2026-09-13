@@ -75,9 +75,20 @@ public:
 	/// Unit vector pointing *toward* the sun. Derived from the sun timer.
 	[[nodiscard]] glm::vec3 sunDirection() const;
 	[[nodiscard]] glm::vec4 sunIntensity() const;
+	[[nodiscard]] glm::vec4 ambientIntensity() const;
+
+	/// The brightest value the scene can show right now; the shader divides
+	/// by it. 1.0 everywhere in LDR, and in HDR it follows the sun.
+	[[nodiscard]] float maxIntensity() const;
 
 	[[nodiscard]] glm::vec3 pointLightPosition(std::size_t index) const;
 	[[nodiscard]] glm::vec4 pointLightIntensity(std::size_t index) const;
+
+	/// Swaps between gltut's two lighting environments. LDR keeps every value
+	/// within [0, 1]; HDR lets the sun exceed it and tone-maps back down. The
+	/// timers are untouched, so flipping mid-day compares the same moment.
+	void setHdr(bool hdr);
+	[[nodiscard]] bool isHdr() const noexcept;
 
 	// Timer control. Scrubbing works while paused, which is the point of it.
 
@@ -112,14 +123,14 @@ private:
 	glc::TimedLinearInterpolator<glm::vec4> sunIntensityInterpolator_;
 	glc::TimedLinearInterpolator<glm::vec4> backgroundInterpolator_;
 
-	/// The brightest value the scene can show right now; the fragment shader
-	/// divides by it. 3.0 under the noon sun, 1.0 at night, so the same lamp
-	/// reads three times brighter once the sun is gone.
+	/// 3.0 under the HDR noon sun, 1.0 at night, so the same lamp reads three
+	/// times brighter once the sun is gone.
 	glc::TimedLinearInterpolator<float> maxIntensityInterpolator_;
 
 	std::array<glc::ConstVelLinearInterpolator<glm::vec3>, kNumberOfPointLights> paths_;
 	std::array<glc::CycleTimer, kNumberOfPointLights> pointTimers_;
-	std::array<glm::vec4, kNumberOfPointLights> pointIntensity_;
+	std::array<glm::vec4, kNumberOfPointLights> pointIntensity_{};
 
+	bool hdr_{true};
 	float halfBrightnessDistance_{70.0F};
 };

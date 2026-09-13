@@ -15,6 +15,7 @@
 
 #include <imgui.h>
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -45,6 +46,14 @@ constexpr float kTetraSpinSeconds = 2.5F;
 /// gltut leaves the point-light markers as unscaled unit cubes, which in a
 /// 220-unit scene are single pixels. Big enough to aim at instead.
 constexpr float kPointMarkerScale = 3.0F;
+
+/// Readout labels, in LightManager's point-light order (see the paths in
+/// lights.cpp).
+constexpr std::array<const char*, kNumberOfPointLights> kPointLightLabels{
+    "ring",
+    "right",
+    "left",
+};
 
 struct ProjectionBlock {
 	glm::mat4 cameraToClipMatrix;
@@ -329,6 +338,11 @@ private:
 	}
 
 	void drawLightingControls() {
+		bool hdr = lightsManager_.isHdr();
+		if (ImGui::Checkbox("HDR", &hdr)) {
+			lightsManager_.setHdr(hdr);
+		}
+		ImGui::SameLine();
 		ImGui::Checkbox("Show light markers", &drawLights_);
 
 		float halfDistance = lightsManager_.halfBrightnessDistance();
@@ -336,6 +350,29 @@ private:
 		                       ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat)) {
 			lightsManager_.setHalfBrightnessDistance(halfDistance);
 		}
+
+		// Live values at the current time of day, the way the shader sees them.
+		// Sun and ambient are HDR inputs; maxIntensity is what divides them.
+		ImGui::SeparatorText("Current");
+		ImGui::Text("max intensity  %.2f", static_cast<double>(lightsManager_.maxIntensity()));
+		drawIntensityRow("ambient", lightsManager_.ambientIntensity());
+		drawIntensityRow("sun", lightsManager_.sunIntensity());
+		for (std::size_t i = 0; i < kNumberOfPointLights; ++i) {
+			drawIntensityRow(kPointLightLabels[i], lightsManager_.pointLightIntensity(i));
+		}
+	}
+
+	/// One "label  r g b" line with a swatch of the colour as it would be
+	/// tone-mapped right now, so anything above maxIntensity reads as clipped.
+	void drawIntensityRow(const char* label, const glm::vec4& intensity) {
+		const float maxIntensity = lightsManager_.maxIntensity();
+		const glm::vec3 mapped = glm::vec3{intensity} / maxIntensity;
+		ImGui::ColorButton(label, ImVec4{mapped.r, mapped.g, mapped.b, 1.0F},
+		                   ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoAlpha,
+		                   ImVec2{ImGui::GetFrameHeight(), ImGui::GetFrameHeight()});
+		ImGui::SameLine();
+		ImGui::Text("%-8s  %.2f %.2f %.2f", label, static_cast<double>(intensity.r),
+		            static_cast<double>(intensity.g), static_cast<double>(intensity.b));
 	}
 
 	void drawCameraControls() {
