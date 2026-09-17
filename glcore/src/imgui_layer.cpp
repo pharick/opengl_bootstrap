@@ -30,6 +30,9 @@ ImGuiLayer::ImGuiLayer(const Window& window) {
 
 	ImGui::StyleColorsDark();
 	ImGuiIO& io = ImGui::GetIO();
+	// ImGui declares its flag constants as signed ints, so combining them trips
+	// bugprone-signed-bitwise. Nothing to fix on our side.
+	// NOLINTNEXTLINE(bugprone-signed-bitwise)
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 	if (!ImGui_ImplGlfw_InitForOpenGL(window.handle(), true)) {

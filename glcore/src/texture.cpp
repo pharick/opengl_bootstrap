@@ -135,6 +135,36 @@ Texture makeTexture2D(GLsizei width, GLsizei height, GLenum internalFormat, GLen
 	return handle;
 }
 
+Texture makeTexture1D(GLsizei width, GLenum internalFormat, GLenum format, GLenum type,
+                      const void* pixels) {
+	if (width <= 0) {
+		throw std::runtime_error(std::format("cannot create a {}-texel 1D texture", width));
+	}
+
+	Texture handle = Texture::create();
+	glBindTexture(GL_TEXTURE_1D, handle.id());
+
+	// A 1D image is a single row, and a row of single-byte texels is only
+	// 4-byte aligned by accident. The default alignment of 4 would have GL
+	// read past the end of a table whose length is not a multiple of four.
+	GLint previousAlignment = 4;
+	glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	GLC_CHECK(glTexImage1D(GL_TEXTURE_1D, 0, static_cast<GLint>(internalFormat), width, 0, format,
+	                       type, pixels));
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
+
+	// Base level only. Without this the texture is incomplete under any
+	// mipmapping minification filter and samples as black.
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_BASE_LEVEL, 0);
+	GLC_CHECK(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAX_LEVEL, 0));
+
+	glBindTexture(GL_TEXTURE_1D, 0);
+	return handle;
+}
+
 float maxSupportedAnisotropy() {
 	if (GLEW_EXT_texture_filter_anisotropic == GL_FALSE) {
 		return 1.0F;

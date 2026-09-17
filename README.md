@@ -241,6 +241,7 @@ and clear colour, the maximum frame delta, Escape-to-quit and the frame cap.
 | `tut10_point_lights`    | Point light, per-vertex vs per-fragment shading, attenuation, shared GLSL   |
 | `tut11_specular_lights` | Specular highlights: Phong, Blinn-Phong and Gaussian, isolated per term     |
 | `tut13_impostors`       | Sphere impostors: an empty VAO, `gl_VertexID`, `discard`, per-pixel normals |
+| `tut14_basic_texture`   | A 1D look-up texture: `GL_R8`, `sampler1D`, image units, sampler objects    |
 
 Shared GLSL lives in `assets/shaders/common/` (`lighting.glsl`, `specular.glsl`, `gamma.glsl`) and
 is pulled in with `#include`.
@@ -283,13 +284,21 @@ matrix is refused rather than corrupting the stack.
 Also: `Camera` with `OrbitController`/`FlyController` (the book's ViewPole/ObjectPole role),
 `Input` with edge detection that goes quiet while ImGui has focus, `Mesh` for gltut's XML format
 (main VAO plus the file's named attribute subsets, indexed and array draw commands),
-`UniformBuffer` for Tutorial 9+, `loadTexture2D`/`makeTexture2D`/`makeSampler` for Tutorial 14+.
+`UniformBuffer` for Tutorial 9+, `loadTexture2D`/`makeTexture2D`/`makeTexture1D`/`makeSampler` for
+Tutorial 14+.
 
 ## Notes
 
 **macOS reports a 4.1 context even though the project requests 3.3.** That is expected — macOS only
 ships 3.2 and 4.1 core profiles, so a 3.3 request is satisfied by 4.1. GLSL `#version 330` shaders
 compile in it unchanged. Switch targets with `-DGLCORE_GL_VERSION=4.1` if a chapter needs it.
+
+**The presets pin `DEVELOPER_DIR` to the Command Line Tools.** `/usr/bin/c++`, `ld` and `xcrun`
+are shims that follow `xcode-select`, and the Command Line Tools and Xcode.app are updated
+independently. When Xcode lags, its older linker cannot read the newer SDK's `.tbd` stubs (`unknown
+architecture arm64e.x1-macos`) and configuration fails at the compiler check. Setting
+`DEVELOPER_DIR` in the preset makes compiler, linker and SDK all come from the same install,
+without `sudo xcode-select`. If you configure without a preset, export it yourself.
 
 **gltut's XML meshes are wound clockwise.** `AppConfig::frontFace` defaults to `GL_CCW`, so a
 chapter that loads them with `cullFace = true` needs `.frontFace = GL_CW`. Get it wrong and nothing
@@ -315,7 +324,8 @@ _files_ to compare `GL_RGB8` against `GL_SRGB8`. The cost is that every new text
 conversion step, and `.png` sources are kept in the repo purely as the editable master.
 
 Textures generated procedurally in code — which several of the texturing chapters do — skip all of
-this and go through `glc::makeTexture2D(w, h, internalFormat, format, type, pixels)`.
+this and go through `glc::makeTexture2D(w, h, internalFormat, format, type, pixels)`, or
+`glc::makeTexture1D(w, ...)` for a look-up table like `tut14`'s.
 
 **GLEW quirks are handled once**, in `GlLoader`: `glewExperimental` is set for the core profile, and
 the spurious `GL_INVALID_ENUM` that `glewInit` leaves behind is discarded so it cannot be blamed on

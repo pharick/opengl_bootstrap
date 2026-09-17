@@ -41,6 +41,19 @@ struct Texture2DOptions {
                                     GLenum format, GLenum type, const void* pixels,
                                     const Texture2DOptions& options = {});
 
+/// Uploads a one-dimensional image -- an array of texels indexed by a single
+/// normalized coordinate.
+///
+/// Tutorial 14 opens with one of these holding a look-up table, which is the
+/// clearest demonstration that a texture need not be a picture: nothing in it
+/// is a colour, and it is never looked at.
+///
+/// There are no options because a look-up table wants none of them: it is one
+/// level with no mip chain (set here, so the texture is complete under any
+/// filter), and everything else about how it is read belongs to the sampler.
+[[nodiscard]] Texture makeTexture1D(GLsizei width, GLenum internalFormat, GLenum format,
+                                    GLenum type, const void* pixels);
+
 struct SamplerOptions {
 	GLenum minFilter = GL_LINEAR_MIPMAP_LINEAR;
 	GLenum magFilter = GL_LINEAR;
