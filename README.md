@@ -106,7 +106,8 @@ Cache options behind the presets: `GLCORE_WERROR`, `GLCORE_TIDY`, `GLCORE_BUILD_
 `GLCORE_GL_VERSION` (`3.3` or `4.1`).
 
 Configuring also symlinks `compile_commands.json` into the project root, so clangd works with no
-extra setup. It repoints at whichever preset you configured last — run `cmake --preset dev` if your
+extra setup, and `.vscode/c_cpp_properties.json` points the VS Code C/C++ extension at the same
+file. It repoints at whichever preset you configured last — run `cmake --preset dev` if your
 editor starts showing release flags. The symlink is gitignored.
 
 ## Testing
