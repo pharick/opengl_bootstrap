@@ -554,9 +554,10 @@ private:
 	}
 
 	/// Draws `mesh` with the top of the stack as its model matrix, through one
-	/// of its named VAOs or, with no name, its main one -- UnitPlane.xml has no
-	/// named VAOs at all. Uniform scales only in this scene, but the inverse
-	/// transpose is cheap and does not need revisiting when that changes.
+	/// of its named VAOs or, with no name, its main one, which carries every
+	/// attribute the file has -- the ground plane is drawn that way. Uniform
+	/// scales only in this scene, but the inverse transpose is cheap and does
+	/// not need revisiting when that changes.
 	void drawMesh(const glc::Mesh& mesh, MaterialId materialId,
 	              std::optional<std::string_view> vaoName = std::nullopt) {
 		materials_.bind(kMaterialBlockBinding, materialId);

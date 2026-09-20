@@ -244,6 +244,7 @@ and clear colour, the maximum frame delta, Escape-to-quit and the frame cap.
 | `tut13_impostors`                 | Sphere impostors: an empty VAO, `gl_VertexID`, `discard`, per-pixel normals |
 | `tut14_basic_texture`             | A 1D look-up texture: `GL_R8`, `sampler1D`, image units, sampler objects    |
 | `tut14_perspective_interpolation` | `smooth` vs `noperspective`, clip-space W, and the same correction by hand  |
+| `tut14_material_texture`          | Texture mapping: per-vertex UVs, a 2D look-up table, a DDS shininess map    |
 
 Shared GLSL lives in `assets/shaders/common/` (`lighting.glsl`, `specular.glsl`, `gamma.glsl`) and
 is pulled in with `#include`.
@@ -340,7 +341,7 @@ CMakeLists.txt, CMakePresets.json   options, dependency lookup, sanitizers, pres
 cmake/                              CompilerWarnings, AddTutorial, Lint (format/tidy targets)
 glcore/include/glcore/, glcore/src/ the library (22 headers, 19 sources)
 tutorials/tutNN_*/                  one executable per chapter, shaders alongside
-assets/meshes|shaders|textures/     gltut XML meshes, shared GLSL, KTX + PNG masters
+assets/meshes|shaders|textures/     gltut XML meshes, shared GLSL, KTX/DDS + PNG masters
 tests/                              Catch2 tests for glsl_source, matrix_stack, paths
 third_party/                        imgui and gli submodules, wrapped as SYSTEM targets
 tools/png_to_ktx.py                 offline texture conversion

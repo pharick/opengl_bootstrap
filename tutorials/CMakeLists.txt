@@ -9,6 +9,7 @@ if(GLCORE_WITH_MESH_XML)
     add_tutorial(tut12_dynamic_range)
     add_tutorial(tut13_impostors)
     add_tutorial(tut14_basic_texture)
+    add_tutorial(tut14_material_texture)
 endif()
 
 add_tutorial(tut03_textured_quad)
