@@ -233,16 +233,17 @@ and clear colour, the maximum frame delta, Escape-to-quit and the frame cap.
 
 ## Included examples
 
-| Tutorial                | Shows                                                                       |
-| ----------------------- | --------------------------------------------------------------------------- |
-| `tut01_hello_triangle`  | Buffer, VAO, program, hot-reload                                            |
-| `tut02_cube_and_camera` | XML mesh, orbit camera, matrix stack, ImGui panel                           |
-| `tut03_textured_quad`   | KTX loading, samplers, mipmaps, anisotropy, linear vs sRGB                  |
-| `tut09_basic_lighting`  | Diffuse lighting, generated normals, the normal matrix, a `Projection` UBO  |
-| `tut10_point_lights`    | Point light, per-vertex vs per-fragment shading, attenuation, shared GLSL   |
-| `tut11_specular_lights` | Specular highlights: Phong, Blinn-Phong and Gaussian, isolated per term     |
-| `tut13_impostors`       | Sphere impostors: an empty VAO, `gl_VertexID`, `discard`, per-pixel normals |
-| `tut14_basic_texture`   | A 1D look-up texture: `GL_R8`, `sampler1D`, image units, sampler objects    |
+| Tutorial                          | Shows                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| `tut01_hello_triangle`            | Buffer, VAO, program, hot-reload                                            |
+| `tut02_cube_and_camera`           | XML mesh, orbit camera, matrix stack, ImGui panel                           |
+| `tut03_textured_quad`             | KTX loading, samplers, mipmaps, anisotropy, linear vs sRGB                  |
+| `tut09_basic_lighting`            | Diffuse lighting, generated normals, the normal matrix, a `Projection` UBO  |
+| `tut10_point_lights`              | Point light, per-vertex vs per-fragment shading, attenuation, shared GLSL   |
+| `tut11_specular_lights`           | Specular highlights: Phong, Blinn-Phong and Gaussian, isolated per term     |
+| `tut13_impostors`                 | Sphere impostors: an empty VAO, `gl_VertexID`, `discard`, per-pixel normals |
+| `tut14_basic_texture`             | A 1D look-up texture: `GL_R8`, `sampler1D`, image units, sampler objects    |
+| `tut14_perspective_interpolation` | `smooth` vs `noperspective`, clip-space W, and the same correction by hand  |
 
 Shared GLSL lives in `assets/shaders/common/` (`lighting.glsl`, `specular.glsl`, `gamma.glsl`) and
 is pulled in with `#include`.

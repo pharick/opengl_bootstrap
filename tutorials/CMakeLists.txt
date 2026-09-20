@@ -13,3 +13,4 @@ endif()
 
 add_tutorial(tut03_textured_quad)
 add_tutorial(tut09_basic_lighting)
+add_tutorial(tut14_perspective_interpolation)
