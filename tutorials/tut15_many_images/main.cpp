@@ -1,4 +1,4 @@
-// Tutorial 15 (Many Images): Playing Checkers.
+// Tutorial 15 (Many Images): Playing Checkers, Linear Filtering.
 //
 // The previous chapter's textures were tables. This one's is a picture, and
 // the fragment shader does the least it can with it: fetch a texel, write it
@@ -11,16 +11,16 @@
 // 64 rather than 0 to 1, so the sampler's wrap mode -- GL_REPEAT on both axes
 // -- tiles the picture 128 times in each direction. Near the camera each
 // texel covers many pixels; at the horizon each pixel covers many texels, and
-// with the nearest-texel filter used here the far half of the plane breaks
-// up into shimmering moire. That is the book's Figure 15.1, and the rest of
-// the chapter (linear filtering, mipmaps, anisotropy) is about fixing it.
-// None of that is here yet: there is one sampler, and it reads the nearest
-// texel.
+// with the nearest-texel filter the far half of the plane breaks up into
+// shimmering moire. That is the book's Figure 15.1, and the rest of the
+// chapter is about fixing it, one sampler at a time. Two are here: nearest
+// (1), and linear (2), which fixes the near half -- the edges of the big
+// squares at the bottom of the window stop crawling as the camera moves.
+// The far half is untouched, and mipmaps and anisotropy are not here yet.
 //
 // The camera drifts on a small loop by itself; P pauses it. Y swaps the plane
 // for a long square corridor, which puts the same texture on walls that
-// recede at a steeper angle. The number keys pick a sampler, of which there
-// is currently one.
+// recede at a steeper angle. The number keys pick a sampler.
 
 #include <glcore/app.hpp>
 #include <glcore/cycle_timer.hpp>
@@ -77,20 +77,34 @@ struct ProjectionBlock {
 static_assert(sizeof(ProjectionBlock) == 64);
 
 /// One way of reading the texture. The book has six of these, on the keys 1
-/// to 6; the other five arrive with the sections that explain them. Only the
+/// to 6; the rest arrive with the sections that explain them. Only the
 /// filters vary -- the wrap modes are the same for all of them, and set where
 /// the samplers are made.
+///
+/// A filter answers one question: what does a coordinate that lands between
+/// texels return? Magnification and minification are set separately, because
+/// a texture drawn larger than its resolution and one drawn smaller have
+/// different problems; these first two make the same choice for both.
 struct SamplerPreset {
 	const char* label;
 	GLenum minFilter;
 	GLenum magFilter;
 };
 
-constexpr std::size_t kSamplerCount = 1;
+constexpr std::size_t kSamplerCount = 2;
 
 constexpr std::array<SamplerPreset, kSamplerCount> kSamplers{
     {
+        // The texel the coordinate is nearest to, and nothing else. A
+        // coordinate halfway between black and white is one or the other, so
+        // a small move of the camera flips it -- pixel crawl along every
+        // edge (Figure 15.2).
         {.label = "Nearest", .minFilter = GL_NEAREST, .magFilter = GL_NEAREST},
+        // The four texels around the coordinate, weighted by how near each
+        // one is. A fragment covers an area of the texture, not a point, and
+        // this is the cheapest stand-in for averaging that area: the edges
+        // go a little soft and stop crawling (Figure 15.4).
+        {.label = "Linear", .minFilter = GL_LINEAR, .magFilter = GL_LINEAR},
     },
 };
 
@@ -127,7 +141,7 @@ protected:
 		projectionBlock_.bindToPoint(kProjectionBlockBinding);
 
 		// The file carries its mip chain, so the loader uploads eight levels
-		// and generates nothing. The nearest sampler only ever reads level 0.
+		// and generates nothing. Neither sampler here reads past level 0.
 		checkerTexture_ = glc::loadTexture2D(glc::paths::asset("textures/checker_gltut.dds"));
 
 		// The mesh's coordinates go far outside [0, 1], and GL_REPEAT is what
@@ -268,6 +282,7 @@ private:
 			ImGui::TextDisabled("(%zu)", i + 1);
 		}
 		ImGui::TextDisabled("Wrap S and T: GL_REPEAT, for every sampler.");
+		ImGui::TextDisabled("Watch the bottom edge of the window while the camera moves.");
 	}
 
 	void drawSceneControls() {
