@@ -3,6 +3,7 @@
 #include <glcore/handle.hpp>
 
 #include <filesystem>
+#include <span>
 
 // Texture and sampler creation, for the texturing chapters (14 onward).
 //
@@ -40,6 +41,34 @@ struct Texture2DOptions {
 [[nodiscard]] Texture makeTexture2D(GLsizei width, GLsizei height, GLenum internalFormat,
                                     GLenum format, GLenum type, const void* pixels,
                                     const Texture2DOptions& options = {});
+
+/// One image of an explicitly supplied mip chain.
+struct MipLevel {
+	GLsizei width;
+	GLsizei height;
+	const void* pixels;
+};
+
+/// Uploads a mip chain whose levels are given rather than generated.
+///
+/// glGenerateMipmap covers the usual case -- smaller versions of one image --
+/// and this covers the case where the levels are not versions of each other at
+/// all. Tutorial 15 builds one whose every level is a different flat colour, so
+/// that the boundary between mipmaps is visible on screen; a chain loaded from
+/// a file that gli cannot read would come through here too.
+///
+/// `levels[0]` is the base image and each entry should be half the size of the
+/// one before, down to 1x1, since that is what GL considers a complete chain.
+/// GL_TEXTURE_MAX_LEVEL is set to the last index supplied, so a partial chain
+/// is complete as far as it goes.
+///
+/// There are no options: a caller supplying its own levels is not asking for
+/// generated ones.
+///
+/// \throws std::runtime_error if `levels` is empty or any extent is not
+/// positive.
+[[nodiscard]] Texture makeTexture2D(std::span<const MipLevel> levels, GLenum internalFormat,
+                                    GLenum format, GLenum type);
 
 /// Uploads a one-dimensional image -- an array of texels indexed by a single
 /// normalized coordinate.

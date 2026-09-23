@@ -135,6 +135,49 @@ Texture makeTexture2D(GLsizei width, GLsizei height, GLenum internalFormat, GLen
 	return handle;
 }
 
+Texture makeTexture2D(std::span<const MipLevel> levels, GLenum internalFormat, GLenum format,
+                      GLenum type) {
+	if (levels.empty()) {
+		throw std::runtime_error("cannot create a texture with no mip levels");
+	}
+
+	Texture handle = Texture::create();
+	glBindTexture(GL_TEXTURE_2D, handle.id());
+
+	// The reason this matters here more than anywhere else: a row of an upper
+	// mip level is short. Three-byte texels at a width of 2 make a 6-byte row,
+	// and under GL's default alignment of 4 the driver would expect 8 and read
+	// the level skewed. Every chain that goes small enough ends up with a row
+	// like that, whatever the texel size.
+	GLint previousAlignment = 4;
+	glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	for (std::size_t level = 0; level < levels.size(); ++level) {
+		const MipLevel& image = levels[level];
+		if (image.width <= 0 || image.height <= 0) {
+			glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
+			throw std::runtime_error(
+			    std::format("mip level {} is {}x{}", level, image.width, image.height));
+		}
+		GLC_CHECK(glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level),
+		                       static_cast<GLint>(internalFormat), image.width, image.height, 0,
+		                       format, type, image.pixels));
+	}
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
+
+	// The usable range, as a closed interval. Without the upper bound GL still
+	// expects levels below the smallest one supplied, and the texture is
+	// incomplete under any mipmapping filter.
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+	GLC_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL,
+	                          static_cast<GLint>(levels.size() - 1)));
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	return handle;
+}
+
 Texture makeTexture1D(GLsizei width, GLenum internalFormat, GLenum format, GLenum type,
                       const void* pixels) {
 	if (width <= 0) {

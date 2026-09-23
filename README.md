@@ -245,7 +245,7 @@ and clear colour, the maximum frame delta, Escape-to-quit and the frame cap.
 | `tut14_basic_texture`             | A 1D look-up texture: `GL_R8`, `sampler1D`, image units, sampler objects    |
 | `tut14_perspective_interpolation` | `smooth` vs `noperspective`, clip-space W, and the same correction by hand  |
 | `tut14_material_texture`          | Texture mapping: per-vertex UVs, a 2D look-up table, a DDS shininess map    |
-| `tut15_many_images`               | A picture as a texture: `GL_REPEAT` tiling, `GL_NEAREST` vs `GL_LINEAR`     |
+| `tut15_many_images`               | Texture filtering: `GL_REPEAT` tiling, nearest/linear, mipmap filtering     |
 
 Shared GLSL lives in `assets/shaders/common/` (`lighting.glsl`, `specular.glsl`, `gamma.glsl`) and
 is pulled in with `#include`.
@@ -289,7 +289,8 @@ Also: `Camera` with `OrbitController`/`FlyController` (the book's ViewPole/Objec
 `Input` with edge detection that goes quiet while ImGui has focus, `Mesh` for gltut's XML format
 (main VAO plus the file's named attribute subsets, indexed and array draw commands),
 `UniformBuffer` for Tutorial 9+, `loadTexture2D`/`makeTexture2D`/`makeTexture1D`/`makeSampler` for
-Tutorial 14+.
+Tutorial 14+ (`makeTexture2D` also takes an explicit span of `MipLevel`s, for a mip chain whose
+levels are not scaled copies of one image — `tut15` builds one to make level selection visible).
 
 ## Notes
 

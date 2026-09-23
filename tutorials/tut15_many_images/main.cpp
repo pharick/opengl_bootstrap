@@ -1,4 +1,5 @@
-// Tutorial 15 (Many Images): Playing Checkers, Linear Filtering.
+// Tutorial 15 (Many Images): Playing Checkers, Linear Filtering, Needs More
+// Pictures.
 //
 // The previous chapter's textures were tables. This one's is a picture, and
 // the fragment shader does the least it can with it: fetch a texel, write it
@@ -13,10 +14,22 @@
 // texel covers many pixels; at the horizon each pixel covers many texels, and
 // with the nearest-texel filter the far half of the plane breaks up into
 // shimmering moire. That is the book's Figure 15.1, and the rest of the
-// chapter is about fixing it, one sampler at a time. Two are here: nearest
-// (1), and linear (2), which fixes the near half -- the edges of the big
-// squares at the bottom of the window stop crawling as the camera moves.
-// The far half is untouched, and mipmaps and anisotropy are not here yet.
+// chapter is about fixing it, one sampler at a time.
+//
+// Four are here. Nearest (1) and linear (2) differ only in what a coordinate
+// between texels returns, and both sample the full-size image: linear fixes
+// the near half of the plane, where a texel covers many pixels, and does
+// nothing for the far half, where the problem is the opposite. Fixing that
+// end needs smaller copies of the image to sample instead -- mipmaps -- and
+// a minification filter that says to use them: GL_LINEAR_MIPMAP_NEAREST (3)
+// picks the one nearest the fragment's size, GL_LINEAR_MIPMAP_LINEAR (4)
+// blends the two nearest, which hides the seam where one level gives way to
+// the next. Anisotropy, which is what is still wrong after that, is not here.
+//
+// Spacebar swaps the checkerboard for a texture whose every mipmap level is a
+// different flat colour, so the levels themselves are visible: each band of
+// colour on the floor is one mipmap, and under filter 4 the bands fade into
+// each other instead of meeting at a line.
 //
 // The camera drifts on a small loop by itself; P pauses it. Y swaps the plane
 // for a long square corridor, which puts the same texture on walls that
@@ -38,6 +51,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <vector>
 
 namespace {
 
@@ -84,14 +98,16 @@ static_assert(sizeof(ProjectionBlock) == 64);
 /// A filter answers one question: what does a coordinate that lands between
 /// texels return? Magnification and minification are set separately, because
 /// a texture drawn larger than its resolution and one drawn smaller have
-/// different problems; these first two make the same choice for both.
+/// different problems. Only minification can name a mipmap mode -- a fragment
+/// smaller than a texel has no use for a smaller copy of the image -- which is
+/// why the last two presets differ from the second in the min filter alone.
 struct SamplerPreset {
 	const char* label;
 	GLenum minFilter;
 	GLenum magFilter;
 };
 
-constexpr std::size_t kSamplerCount = 2;
+constexpr std::size_t kSamplerCount = 4;
 
 constexpr std::array<SamplerPreset, kSamplerCount> kSamplers{
     {
@@ -105,8 +121,87 @@ constexpr std::array<SamplerPreset, kSamplerCount> kSamplers{
         // this is the cheapest stand-in for averaging that area: the edges
         // go a little soft and stop crawling (Figure 15.4).
         {.label = "Linear", .minFilter = GL_LINEAR, .magFilter = GL_LINEAR},
+        // Four texels is still four texels, and at the horizon the fragment
+        // covers far more than that -- which is what the distant mess is.
+        // This picks the mipmap level whose texels are closest to the size
+        // of the fragment and takes its four texels instead, so the value
+        // comes back a plausible grey rather than whichever two of black and
+        // white happened to be sampled (Figure 15.7).
+        {
+            .label = "Linear, nearest mipmap",
+            .minFilter = GL_LINEAR_MIPMAP_NEAREST,
+            .magFilter = GL_LINEAR,
+        },
+        // The same, but sampling the two levels either side of the fragment's
+        // size and blending between them. One level is chosen per fragment
+        // above, so neighbouring fragments can land on different levels and
+        // the change shows up as a visible line across the floor; blending
+        // smears that line out (Figure 15.9). The two LINEARs are separate
+        // choices: within a level, and between levels.
+        {
+            .label = "Linear, linear mipmap",
+            .minFilter = GL_LINEAR_MIPMAP_LINEAR,
+            .magFilter = GL_LINEAR,
+        },
     },
 };
+
+/// The book's mipmapColors. One flat colour per level of the special texture,
+/// which is not a picture of anything -- it exists so that the mipmap level a
+/// fragment ends up on is visible on screen.
+constexpr std::size_t kMipmapLevelCount = 8;
+
+constexpr std::array<std::array<GLubyte, 3>, kMipmapLevelCount> kMipmapColors{
+    {
+        {0xFF, 0xFF, 0x00}, // level 0, the full 128x128
+        {0xFF, 0x00, 0xFF},
+        {0x00, 0xFF, 0xFF},
+        {0xFF, 0x00, 0x00},
+        {0x00, 0xFF, 0x00},
+        {0x00, 0x00, 0xFF},
+        {0x00, 0x00, 0x00},
+        {0xFF, 0xFF, 0xFF}, // level 7, a single texel
+    },
+};
+
+/// The special texture: eight levels, each a single colour.
+///
+/// Ordinary mipmaps are smaller versions of one image, and the level a
+/// fragment lands on is invisible precisely because every level looks alike.
+/// Making them disagree is what turns level selection into something you can
+/// watch, and nothing says a chain has to be self-consistent -- GL only cares
+/// that the sizes halve.
+///
+/// These texels are three bytes, not four, which is the chapter's aside about
+/// alignment: the 2x2 level's rows are 6 bytes long and GL's default unpack
+/// alignment of 4 would misread them. makeTexture2D sets the alignment to 1
+/// for exactly this reason, so nothing here has to.
+[[nodiscard]] glc::Texture makeMipmapTestTexture() {
+	// The spans handed over have to stay alive until the upload, so every
+	// level is built before any of them is described.
+	std::array<std::vector<GLubyte>, kMipmapLevelCount> pixels;
+	std::array<glc::MipLevel, kMipmapLevelCount> levels{};
+
+	GLsizei side = kCheckerTextureSize;
+	for (std::size_t level = 0; level < kMipmapLevelCount; ++level) {
+		const auto texels = static_cast<std::size_t>(side) * static_cast<std::size_t>(side);
+		const std::array<GLubyte, 3>& color = kMipmapColors[level];
+
+		std::vector<GLubyte>& buffer = pixels[level];
+		buffer.reserve(texels * color.size());
+		for (std::size_t texel = 0; texel < texels; ++texel) {
+			buffer.insert(buffer.end(), color.begin(), color.end());
+		}
+
+		levels[level] = {.width = side, .height = side, .pixels = buffer.data()};
+		side /= 2; // every level is half the last, down to 1x1
+	}
+
+	// GL_RGB8 from GL_RGB bytes. The checkerboard beside it is GL_RGB8 from
+	// BGRA bytes in a file: the internal format is what GL keeps, and it need
+	// not resemble the layout handed over.
+	return glc::makeTexture2D(levels, GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE);
+}
 
 /// Draws the texture into the panel at one screen pixel per texel, T = 0 at
 /// the bottom as GL has it.
@@ -140,9 +235,13 @@ protected:
 
 		projectionBlock_.bindToPoint(kProjectionBlockBinding);
 
-		// The file carries its mip chain, so the loader uploads eight levels
-		// and generates nothing. Neither sampler here reads past level 0.
+		// The file carries its mip chain, so the loader uploads all eight
+		// levels and generates nothing. Those levels have been there since the
+		// first sampler was written; what changed is that two of the samplers
+		// now ask for them. DDS is one of the few formats that can hold a
+		// whole chain in one file, which is why the book ships this as DDS.
 		checkerTexture_ = glc::loadTexture2D(glc::paths::asset("textures/checker_gltut.dds"));
+		mipmapTestTexture_ = makeMipmapTestTexture();
 
 		// The mesh's coordinates go far outside [0, 1], and GL_REPEAT is what
 		// makes that mean "tile it": 1.1 reads the texel at 0.1, -0.1 the one
@@ -192,6 +291,9 @@ protected:
 		if (input().keyPressed(GLFW_KEY_P)) {
 			cameraTimer_.togglePause();
 		}
+		if (input().keyPressed(GLFW_KEY_SPACE)) {
+			useMipmapTexture_ = !useMipmapTexture_;
+		}
 		for (std::size_t i = 0; i < kSamplerCount; ++i) {
 			if (input().keyPressed(GLFW_KEY_1 + static_cast<int>(i))) {
 				currentSampler_ = i;
@@ -207,10 +309,8 @@ protected:
 			if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
 				drawSceneControls();
 			}
-			if (ImGui::CollapsingHeader("Texture")) {
-				ImGui::Text("checker_gltut.dds, %d x %d", kCheckerTextureSize, kCheckerTextureSize);
-				drawTexturePreview(checkerTexture_, kCheckerTextureSize);
-				ImGui::TextDisabled("Tiled 128 times across the plane.");
+			if (ImGui::CollapsingHeader("Texture", ImGuiTreeNodeFlags_DefaultOpen)) {
+				drawTextureControls();
 			}
 		}
 		ImGui::End();
@@ -226,7 +326,8 @@ protected:
 		// Texture and sampler go on the same unit. The texture says what is
 		// read; the sampler says how -- and swapping the sampler is all the
 		// number keys do.
-		glc::bindTextureUnit(kColorTextureUnit, checkerTexture_, samplers_[currentSampler_]);
+		const glc::Texture& texture = useMipmapTexture_ ? mipmapTestTexture_ : checkerTexture_;
+		glc::bindTextureUnit(kColorTextureUnit, texture, samplers_[currentSampler_]);
 
 		const glc::Mesh& mesh = drawCorridor_ ? corridorMesh_ : planeMesh_;
 		mesh.render("tex");
@@ -242,10 +343,12 @@ private:
 	glc::Mesh corridorMesh_;
 
 	glc::Texture checkerTexture_;
+	glc::Texture mipmapTestTexture_;
 	std::array<glc::Sampler, kSamplerCount> samplers_{};
 
 	std::size_t currentSampler_{0};
 	bool drawCorridor_{false};
+	bool useMipmapTexture_{false};
 	int appliedReloads_{0};
 
 	/// Everything that survives only until the next relink: the uniform block
@@ -282,7 +385,31 @@ private:
 			ImGui::TextDisabled("(%zu)", i + 1);
 		}
 		ImGui::TextDisabled("Wrap S and T: GL_REPEAT, for every sampler.");
-		ImGui::TextDisabled("Watch the bottom edge of the window while the camera moves.");
+		ImGui::TextDisabled("1 vs 2: the bottom edge. 2 vs 3: the horizon.");
+	}
+
+	void drawTextureControls() {
+		if (ImGui::RadioButton("Checkerboard", !useMipmapTexture_)) {
+			useMipmapTexture_ = false;
+		}
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Mipmap levels", useMipmapTexture_)) {
+			useMipmapTexture_ = true;
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("(Space)");
+
+		if (useMipmapTexture_) {
+			ImGui::Text("Built in code, %d x %d, %zu levels", kCheckerTextureSize,
+			            kCheckerTextureSize, kMipmapLevelCount);
+			drawTexturePreview(mipmapTestTexture_, kCheckerTextureSize);
+			ImGui::TextDisabled("Level 0 is yellow; the preview shows only it.");
+		} else {
+			ImGui::Text("checker_gltut.dds, %d x %d, %zu levels", kCheckerTextureSize,
+			            kCheckerTextureSize, kMipmapLevelCount);
+			drawTexturePreview(checkerTexture_, kCheckerTextureSize);
+			ImGui::TextDisabled("Tiled 128 times across the plane.");
+		}
 	}
 
 	void drawSceneControls() {
