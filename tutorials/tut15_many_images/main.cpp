@@ -1,5 +1,5 @@
 // Tutorial 15 (Many Images): Playing Checkers, Linear Filtering, Needs More
-// Pictures.
+// Pictures, Anisotropy.
 //
 // The previous chapter's textures were tables. This one's is a picture, and
 // the fragment shader does the least it can with it: fetch a texel, write it
@@ -16,7 +16,7 @@
 // shimmering moire. That is the book's Figure 15.1, and the rest of the
 // chapter is about fixing it, one sampler at a time.
 //
-// Four are here. Nearest (1) and linear (2) differ only in what a coordinate
+// Six are here. Nearest (1) and linear (2) differ only in what a coordinate
 // between texels returns, and both sample the full-size image: linear fixes
 // the near half of the plane, where a texel covers many pixels, and does
 // nothing for the far half, where the problem is the opposite. Fixing that
@@ -24,7 +24,15 @@
 // a minification filter that says to use them: GL_LINEAR_MIPMAP_NEAREST (3)
 // picks the one nearest the fragment's size, GL_LINEAR_MIPMAP_LINEAR (4)
 // blends the two nearest, which hides the seam where one level gives way to
-// the next. Anisotropy, which is what is still wrong after that, is not here.
+// the next.
+//
+// What is still wrong after that is the blur: the far half of the plane goes
+// grey well before the squares are too small to see. A fragment on a floor
+// seen edge-on covers a long thin sliver of texture -- many texels deep, few
+// wide -- and mipmapping picks its level by the long side, so it throws away
+// detail across the short one. Anisotropic filtering (5 and 6) samples along
+// the long side instead, several times, from a level chosen for the short
+// one. 5 allows up to four samples, 6 as many as the driver will take.
 //
 // Spacebar swaps the checkerboard for a texture whose every mipmap level is a
 // different flat colour, so the levels themselves are visible: each band of
@@ -48,6 +56,7 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -91,8 +100,7 @@ struct ProjectionBlock {
 static_assert(sizeof(ProjectionBlock) == 64);
 
 /// One way of reading the texture. The book has six of these, on the keys 1
-/// to 6; the rest arrive with the sections that explain them. Only the
-/// filters vary -- the wrap modes are the same for all of them, and set where
+/// to 6. Only the filters vary -- the wrap modes are the same for all of them, and set where
 /// the samplers are made.
 ///
 /// A filter answers one question: what does a coordinate that lands between
@@ -100,14 +108,23 @@ static_assert(sizeof(ProjectionBlock) == 64);
 /// a texture drawn larger than its resolution and one drawn smaller have
 /// different problems. Only minification can name a mipmap mode -- a fragment
 /// smaller than a texel has no use for a smaller copy of the image -- which is
-/// why the last two presets differ from the second in the min filter alone.
+/// why the mipmap presets differ from the second in the min filter alone.
+///
+/// Anisotropy is not a filter mode but a limit on top of one: how many samples
+/// the filter may take along a fragment's footprint. 1 means just the one.
 struct SamplerPreset {
-	const char* label;
-	GLenum minFilter;
-	GLenum magFilter;
+	const char* label{};
+	GLenum minFilter{};
+	GLenum magFilter{};
+	float maxAnisotropy = 1.0F;
 };
 
-constexpr std::size_t kSamplerCount = 4;
+/// Stands in for the driver's own limit, which is not known until there is a
+/// context to ask. makeSampler clamps anything above the limit down to it, but
+/// the panel wants to say what the limit is, so it is looked up by name.
+constexpr float kDriverMaxAnisotropy = 0.0F;
+
+constexpr std::size_t kSamplerCount = 6;
 
 constexpr std::array<SamplerPreset, kSamplerCount> kSamplers{
     {
@@ -142,6 +159,27 @@ constexpr std::array<SamplerPreset, kSamplerCount> kSamplers{
             .label = "Linear, linear mipmap",
             .minFilter = GL_LINEAR_MIPMAP_LINEAR,
             .magFilter = GL_LINEAR,
+        },
+        // The fragment's footprint on the floor is a thin sliver pointing
+        // away from the camera, and the level above was picked to fit its
+        // long side -- too coarse for the short one, hence the blur. This
+        // picks a level for the short side and takes up to four samples down
+        // the long one (Figure 15.13). The mipmap filter still applies: each
+        // of those samples is itself a trilinear fetch.
+        {
+            .label = "Low anisotropic",
+            .minFilter = GL_LINEAR_MIPMAP_LINEAR,
+            .magFilter = GL_LINEAR,
+            .maxAnisotropy = 4.0F,
+        },
+        // The same, with no cap but the hardware's -- 16 on most of it. The
+        // difference from 4 is only at the horizon, where the sliver is
+        // longest (Figure 15.14).
+        {
+            .label = "Max anisotropic",
+            .minFilter = GL_LINEAR_MIPMAP_LINEAR,
+            .magFilter = GL_LINEAR,
+            .maxAnisotropy = kDriverMaxAnisotropy,
         },
     },
 };
@@ -248,12 +286,19 @@ protected:
 		// at 0.9, and the picture repeats as if it were infinitely large. The
 		// two axes need not agree -- S could clamp while T repeats -- but here
 		// every sampler wraps both.
+		//
+		// Anisotropic filtering is still an extension --
+		// EXT_texture_filter_anisotropic, core only from GL 4.6 -- though one
+		// every desktop driver has. Without it the limit comes back as 1 and
+		// the last two samplers are the fourth under other names.
+		driverMaxAnisotropy_ = glc::maxSupportedAnisotropy();
 		for (std::size_t i = 0; i < kSamplerCount; ++i) {
 			samplers_[i] = glc::makeSampler({
 			    .minFilter = kSamplers[i].minFilter,
 			    .magFilter = kSamplers[i].magFilter,
 			    .wrapS = GL_REPEAT,
 			    .wrapT = GL_REPEAT,
+			    .maxAnisotropy = anisotropyOf(kSamplers[i]),
 			});
 		}
 
@@ -346,6 +391,7 @@ private:
 	glc::Texture mipmapTestTexture_;
 	std::array<glc::Sampler, kSamplerCount> samplers_{};
 
+	float driverMaxAnisotropy_{1.0F};
 	std::size_t currentSampler_{0};
 	bool drawCorridor_{false};
 	bool useMipmapTexture_{false};
@@ -376,6 +422,12 @@ private:
 		                 kCameraTarget + glm::vec3{slide, nod, 0.0F});
 	}
 
+	/// The anisotropy a preset asks for, with the driver's limit filled in.
+	[[nodiscard]] float anisotropyOf(const SamplerPreset& preset) const {
+		return preset.maxAnisotropy == kDriverMaxAnisotropy ? driverMaxAnisotropy_
+		                                                    : preset.maxAnisotropy;
+	}
+
 	void drawSamplerControls() {
 		for (std::size_t i = 0; i < kSamplerCount; ++i) {
 			if (ImGui::RadioButton(kSamplers[i].label, currentSampler_ == i)) {
@@ -386,6 +438,17 @@ private:
 		}
 		ImGui::TextDisabled("Wrap S and T: GL_REPEAT, for every sampler.");
 		ImGui::TextDisabled("1 vs 2: the bottom edge. 2 vs 3: the horizon.");
+		ImGui::TextDisabled("4 vs 5: the middle distance. 5 vs 6: the horizon.");
+
+		if (driverMaxAnisotropy_ > 1.0F) {
+			// What the sampler actually got: makeSampler clamps to the limit.
+			const float applied =
+			    std::min(anisotropyOf(kSamplers[currentSampler_]), driverMaxAnisotropy_);
+			ImGui::Text("Max anisotropy: %.0f (driver limit %.0f)", static_cast<double>(applied),
+			            static_cast<double>(driverMaxAnisotropy_));
+		} else {
+			ImGui::TextDisabled("EXT_texture_filter_anisotropic is unavailable.");
+		}
 	}
 
 	void drawTextureControls() {

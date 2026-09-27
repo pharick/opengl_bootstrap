@@ -245,7 +245,7 @@ and clear colour, the maximum frame delta, Escape-to-quit and the frame cap.
 | `tut14_basic_texture`             | A 1D look-up texture: `GL_R8`, `sampler1D`, image units, sampler objects    |
 | `tut14_perspective_interpolation` | `smooth` vs `noperspective`, clip-space W, and the same correction by hand  |
 | `tut14_material_texture`          | Texture mapping: per-vertex UVs, a 2D look-up table, a DDS shininess map    |
-| `tut15_many_images`               | Texture filtering: `GL_REPEAT` tiling, nearest/linear, mipmap filtering     |
+| `tut15_many_images`               | Texture filtering: `GL_REPEAT` tiling, nearest/linear, mipmaps, anisotropy  |
 
 Shared GLSL lives in `assets/shaders/common/` (`lighting.glsl`, `specular.glsl`, `gamma.glsl`) and
 is pulled in with `#include`.
