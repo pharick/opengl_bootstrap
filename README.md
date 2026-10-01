@@ -246,6 +246,9 @@ and clear colour, the maximum frame delta, Escape-to-quit and the frame cap.
 | `tut14_perspective_interpolation` | `smooth` vs `noperspective`, clip-space W, and the same correction by hand  |
 | `tut14_material_texture`          | Texture mapping: per-vertex UVs, a 2D look-up table, a DDS shininess map    |
 | `tut15_many_images`               | Texture filtering: `GL_REPEAT` tiling, nearest/linear, mipmaps, anisotropy  |
+| `tut16_gamma_ramp`                | sRGB textures: the same bytes as `GL_RGB8` vs `GL_SRGB8`, screen-space quads |
+| `tut16_gamma_checkers`            | sRGB and mipmaps: linear- vs gamma-averaged mip chains, shader gamma        |
+| `tut16_gamma_landscape`           | `GL_FRAMEBUFFER_SRGB`, a lit sRGB terrain, lighting hot-reloaded from XML   |
 
 Shared GLSL lives in `assets/shaders/common/` (`lighting.glsl`, `specular.glsl`, `gamma.glsl`) and
 is pulled in with `#include`.
@@ -289,7 +292,8 @@ Also: `Camera` with `OrbitController`/`FlyController` (the book's ViewPole/Objec
 `Input` with edge detection that goes quiet while ImGui has focus, `Mesh` for gltut's XML format
 (main VAO plus the file's named attribute subsets, indexed and array draw commands),
 `UniformBuffer` for Tutorial 9+, `loadTexture2D`/`makeTexture2D`/`makeTexture1D`/`makeSampler` for
-Tutorial 14+ (`makeTexture2D` also takes an explicit span of `MipLevel`s, for a mip chain whose
+Tutorial 14+ (`loadTexture2D` takes an `internalFormat` override, so a DDS of plain bytes can be
+uploaded as `GL_SRGB8`; `makeTexture2D` also takes an explicit span of `MipLevel`s, for a mip chain whose
 levels are not scaled copies of one image — `tut15` builds one to make level selection visible).
 
 ## Notes

@@ -64,6 +64,15 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 	const gli::gl converter{gli::gl::PROFILE_GL33};
 	const gli::gl::format format = converter.translate(texture.format(), texture.swizzles());
 	const bool compressed = gli::is_compressed(texture.format());
+	if (compressed && options.internalFormat != GL_NONE) {
+		throw std::runtime_error(
+		    std::format("texture '{}' is block-compressed; its internal format cannot be "
+			            "overridden",
+			            path.string()));
+	}
+	const GLenum internalFormat = options.internalFormat != GL_NONE
+	                                  ? options.internalFormat
+	                                  : static_cast<GLenum>(format.Internal);
 
 	Texture handle = Texture::create();
 	glBindTexture(GL_TEXTURE_2D, handle.id());
@@ -88,7 +97,7 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 			    GL_TEXTURE_2D, glLevel, static_cast<GLenum>(format.Internal), extent.x, extent.y, 0,
 			    static_cast<GLsizei>(texture.size(level)), texture.data(0, 0, level)));
 		} else {
-			GLC_CHECK(glTexImage2D(GL_TEXTURE_2D, glLevel, static_cast<GLint>(format.Internal),
+			GLC_CHECK(glTexImage2D(GL_TEXTURE_2D, glLevel, static_cast<GLint>(internalFormat),
 			                       extent.x, extent.y, 0, static_cast<GLenum>(format.External),
 			                       static_cast<GLenum>(format.Type), texture.data(0, 0, level)));
 		}
@@ -104,7 +113,7 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 
 	log::trace("loaded {}: {}x{}, {} level(s), internal format 0x{:04X}{}",
 	           path.filename().string(), texture.extent().x, texture.extent().y, texture.levels(),
-	           static_cast<unsigned>(format.Internal), compressed ? ", compressed" : "");
+	           static_cast<unsigned>(internalFormat), compressed ? ", compressed" : "");
 
 	return handle;
 }

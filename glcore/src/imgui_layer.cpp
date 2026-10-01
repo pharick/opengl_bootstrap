@@ -1,8 +1,9 @@
 #include <glcore/imgui_layer.hpp>
 
-// No GL or GLFW headers here on purpose: this file makes no GL calls of its
-// own, and imgui_impl_glfw.h forward-declares GLFWwindow, so Window::handle()
-// can be passed straight through.
+#include <glcore/gl.hpp>
+
+// No GLFW header here: imgui_impl_glfw.h forward-declares GLFWwindow, so
+// Window::handle() can be passed straight through.
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -62,8 +63,21 @@ void ImGuiLayer::beginFrame() {
 }
 
 void ImGuiLayer::endFrame() {
+	// ImGui's colours are already sRGB-encoded. A tutorial that turns on
+	// GL_FRAMEBUFFER_SRGB (Tutorial 16) would have them encoded a second time
+	// and the panel would come out washed-out, so the conversion is switched
+	// off for the UI and restored for the next frame's scene.
+	const bool srgb = glIsEnabled(GL_FRAMEBUFFER_SRGB) == GL_TRUE;
+	if (srgb) {
+		glDisable(GL_FRAMEBUFFER_SRGB);
+	}
+
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+	if (srgb) {
+		glEnable(GL_FRAMEBUFFER_SRGB);
+	}
 }
 
 bool ImGuiLayer::wantsMouse() {
