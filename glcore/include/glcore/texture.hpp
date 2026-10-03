@@ -45,6 +45,25 @@ struct Texture2DOptions {
 [[nodiscard]] Texture loadTexture2D(const std::filesystem::path& path,
                                     const Texture2DOptions& options = {});
 
+struct TextureCubeOptions {
+	/// As for Texture2DOptions: build a mip chain if the file has none, unless
+	/// the format is compressed.
+	bool generateMipmaps = true;
+
+	/// As for Texture2DOptions: GL_NONE keeps the file's format, and a
+	/// compressed file accepts only its sRGB twin.
+	GLenum internalFormat = GL_NONE;
+};
+
+/// Loads a DDS or KTX cube map: six square 2D faces, sampled with a direction
+/// rather than a coordinate. Tutorial 17's cube point light reads its
+/// intensity from one.
+///
+/// Throws if the file is missing, unreadable, or not a cube map. Bind it with
+/// bindTextureUnit(unit, texture, sampler, GL_TEXTURE_CUBE_MAP).
+[[nodiscard]] Texture loadTextureCube(const std::filesystem::path& path,
+                                      const TextureCubeOptions& options = {});
+
 /// Uploads pixels already in memory. This is the path for procedurally
 /// generated textures, and the escape hatch when you have bytes from anywhere.
 ///

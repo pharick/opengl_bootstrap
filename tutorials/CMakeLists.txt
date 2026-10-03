@@ -15,6 +15,7 @@ if(GLCORE_WITH_MESH_XML)
     add_tutorial(tut16_gamma_landscape)
     add_tutorial(tut17_double_projection)
     add_tutorial(tut17_projected_light)
+    add_tutorial(tut17_cube_point_light)
 endif()
 
 add_tutorial(tut03_textured_quad)

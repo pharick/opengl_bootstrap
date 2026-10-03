@@ -19,27 +19,27 @@ namespace {
 /// gli's swizzle enumerators are the GL enum values, so this is a type change
 /// rather than a mapping. Applied so formats gli emulates (luminance, alpha)
 /// sample correctly; it is the identity for ordinary RGB/RGBA.
-void applySwizzle(const gli::gl::format& format) {
+void applySwizzle(GLenum target, const gli::gl::format& format) {
 	const std::array<GLint, 4> swizzle{
 	    static_cast<GLint>(format.Swizzles[0]),
 	    static_cast<GLint>(format.Swizzles[1]),
 	    static_cast<GLint>(format.Swizzles[2]),
 	    static_cast<GLint>(format.Swizzles[3]),
 	};
-	glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle.data());
+	glTexParameteriv(target, GL_TEXTURE_SWIZZLE_RGBA, swizzle.data());
 }
 
 /// Without a mip chain, the default GL_LINEAR_MIPMAP_LINEAR minification filter
 /// leaves the texture incomplete and it samples as black.
-void finishMipLevels(bool hasChain, bool canGenerate) {
+void finishMipLevels(GLenum target, bool hasChain, bool canGenerate) {
 	if (hasChain) {
 		return;
 	}
 	if (canGenerate) {
-		GLC_CHECK(glGenerateMipmap(GL_TEXTURE_2D));
+		GLC_CHECK(glGenerateMipmap(target));
 	} else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, 0);
 	}
 }
 
@@ -60,9 +60,23 @@ void finishMipLevels(bool hasChain, bool canGenerate) {
 	}
 }
 
-} // namespace
+/// The file's internal format, or the caller's override of it. A compressed
+/// format only accepts its sRGB twin as an override.
+[[nodiscard]] GLenum resolveInternalFormat(const fs::path& path, const gli::gl::format& format,
+                                           bool compressed, GLenum override) {
+	const auto fileFormat = static_cast<GLenum>(format.Internal);
+	if (compressed && override != GL_NONE && override != fileFormat &&
+	    override != srgbVariantOfCompressed(fileFormat)) {
+		throw std::runtime_error(
+		    std::format("texture '{}' is block-compressed (0x{:04X}); its internal format can "
+			            "only be overridden with its sRGB variant",
+			            path.string(), static_cast<unsigned>(fileFormat)));
+	}
+	return override != GL_NONE ? override : fileFormat;
+}
 
-Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
+/// gli::load, with the error a PNG or a typo deserves.
+[[nodiscard]] gli::texture loadOrThrow(const fs::path& path) {
 	const gli::texture loaded = gli::load(path.string());
 	if (loaded.empty()) {
 		throw std::runtime_error(
@@ -70,27 +84,25 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 			            "other formats with tools/png_to_ktx.py",
 			            path.string()));
 	}
+	return loaded;
+}
+
+} // namespace
+
+Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
+	const gli::texture loaded = loadOrThrow(path);
 	if (loaded.target() != gli::TARGET_2D) {
-		throw std::runtime_error(
-		    std::format("texture '{}' is not a plain 2D texture (cubemaps and arrays are not "
-			            "wired up yet)",
-			            path.string()));
+		throw std::runtime_error(std::format(
+		    "texture '{}' is not a plain 2D texture (a cube map loads with loadTextureCube)",
+		    path.string()));
 	}
 
 	const gli::texture2d texture{loaded};
 	const gli::gl converter{gli::gl::PROFILE_GL33};
 	const gli::gl::format format = converter.translate(texture.format(), texture.swizzles());
 	const bool compressed = gli::is_compressed(texture.format());
-	const auto fileFormat = static_cast<GLenum>(format.Internal);
-	if (compressed && options.internalFormat != GL_NONE && options.internalFormat != fileFormat &&
-	    options.internalFormat != srgbVariantOfCompressed(fileFormat)) {
-		throw std::runtime_error(
-		    std::format("texture '{}' is block-compressed (0x{:04X}); its internal format can "
-			            "only be overridden with its sRGB variant",
-			            path.string(), static_cast<unsigned>(fileFormat)));
-	}
 	const GLenum internalFormat =
-	    options.internalFormat != GL_NONE ? options.internalFormat : fileFormat;
+	    resolveInternalFormat(path, format, compressed, options.internalFormat);
 
 	Texture handle = Texture::create();
 	glBindTexture(GL_TEXTURE_2D, handle.id());
@@ -104,7 +116,7 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(texture.levels() - 1));
-	applySwizzle(format);
+	applySwizzle(GL_TEXTURE_2D, format);
 
 	for (std::size_t level = 0; level < texture.levels(); ++level) {
 		const gli::texture2d::extent_type extent = texture.extent(level);
@@ -125,11 +137,74 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 
 	// A compressed format's mips must be authored offline; the driver cannot
 	// synthesize them.
-	finishMipLevels(texture.levels() > 1, options.generateMipmaps && !compressed);
+	finishMipLevels(GL_TEXTURE_2D, texture.levels() > 1, options.generateMipmaps && !compressed);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	log::trace("loaded {}: {}x{}, {} level(s), internal format 0x{:04X}{}",
+	           path.filename().string(), texture.extent().x, texture.extent().y, texture.levels(),
+	           static_cast<unsigned>(internalFormat), compressed ? ", compressed" : "");
+
+	return handle;
+}
+
+Texture loadTextureCube(const fs::path& path, const TextureCubeOptions& options) {
+	const gli::texture loaded = loadOrThrow(path);
+	if (loaded.target() != gli::TARGET_CUBE) {
+		throw std::runtime_error(
+		    std::format("texture '{}' is not a cube map (a 2D texture loads with loadTexture2D)",
+			            path.string()));
+	}
+
+	const gli::texture_cube texture{loaded};
+	const gli::gl converter{gli::gl::PROFILE_GL33};
+	const gli::gl::format format = converter.translate(texture.format(), texture.swizzles());
+	const bool compressed = gli::is_compressed(texture.format());
+	const GLenum internalFormat =
+	    resolveInternalFormat(path, format, compressed, options.internalFormat);
+
+	Texture handle = Texture::create();
+	glBindTexture(GL_TEXTURE_CUBE_MAP, handle.id());
+
+	GLint previousAlignment = 4;
+	glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BASE_LEVEL, 0);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL,
+	                static_cast<GLint>(texture.levels() - 1));
+	applySwizzle(GL_TEXTURE_CUBE_MAP, format);
+
+	// The faces are separate 2D images, uploaded with the 2D functions: the
+	// "2D" in glTexImage2D is the shape of the image, not the texture type.
+	// DDS and GL list the faces in the same order, +X -X +Y -Y +Z -Z, so the
+	// face index is the offset from GL_TEXTURE_CUBE_MAP_POSITIVE_X. No row
+	// flip either: GL's cube faces run t downwards, as the files store them.
+	for (std::size_t face = 0; face < texture.faces(); ++face) {
+		const auto faceTarget = static_cast<GLenum>(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face);
+		for (std::size_t level = 0; level < texture.levels(); ++level) {
+			const gli::texture_cube::extent_type extent = texture.extent(level);
+			const auto glLevel = static_cast<GLint>(level);
+			const void* pixels = texture[face].data(0, 0, level);
+
+			if (compressed) {
+				GLC_CHECK(glCompressedTexImage2D(
+				    faceTarget, glLevel, internalFormat, extent.x, extent.y, 0,
+				    static_cast<GLsizei>(texture[face].size(level)), pixels));
+			} else {
+				GLC_CHECK(glTexImage2D(faceTarget, glLevel, static_cast<GLint>(internalFormat),
+				                       extent.x, extent.y, 0, static_cast<GLenum>(format.External),
+				                       static_cast<GLenum>(format.Type), pixels));
+			}
+		}
+	}
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
+	finishMipLevels(GL_TEXTURE_CUBE_MAP, texture.levels() > 1,
+	                options.generateMipmaps && !compressed);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
+	log::trace("loaded {}: cube map, {}x{} faces, {} level(s), internal format 0x{:04X}{}",
 	           path.filename().string(), texture.extent().x, texture.extent().y, texture.levels(),
 	           static_cast<unsigned>(internalFormat), compressed ? ", compressed" : "");
 
@@ -156,7 +231,7 @@ Texture makeTexture2D(GLsizei width, GLsizei height, GLenum internalFormat, GLen
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
 
-	finishMipLevels(false, options.generateMipmaps);
+	finishMipLevels(GL_TEXTURE_2D, false, options.generateMipmaps);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 	return handle;

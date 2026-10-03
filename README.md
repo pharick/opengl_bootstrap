@@ -251,6 +251,7 @@ and clear colour, the maximum frame delta, Escape-to-quit and the frame cap.
 | `tut16_gamma_landscape`           | `GL_FRAMEBUFFER_SRGB`, a lit sRGB terrain, lighting hot-reloaded from XML   |
 | `tut17_double_projection`         | Split-screen viewports; rotating clip space after the projection, depth clamp |
 | `tut17_projected_light`           | Projective texturing: a texture as a spotlight, `textureProj`, border clamping |
+| `tut17_cube_point_light`          | Cube maps: a point light whose intensity is looked up by direction          |
 
 `demos/projective_texture.html` is a standalone WebGL 2 explainer for Tutorial 17's projective
 texturing: open it in a browser, no build step.
