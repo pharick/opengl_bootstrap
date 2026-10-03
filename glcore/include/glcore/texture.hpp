@@ -2,6 +2,7 @@
 
 #include <glcore/handle.hpp>
 
+#include <array>
 #include <filesystem>
 #include <span>
 
@@ -29,8 +30,10 @@ struct Texture2DOptions {
 	/// bytes, and whether those bytes are sRGB-encoded is a decision made at
 	/// upload (GL_SRGB8 vs GL_RGB8) rather than one recorded in the file.
 	///
-	/// Uncompressed files only -- a compressed format's internal format is
-	/// fixed by its block layout. Asking for an override on one throws.
+	/// A compressed format's layout is fixed by its blocks, so the only
+	/// override it accepts is its sRGB twin (DXT1 -> GL_COMPRESSED_SRGB_S3TC_
+	/// DXT1_EXT and so on): the same blocks, decoded through the sRGB curve.
+	/// Tutorial 17's DDS files need that. Any other override on one throws.
 	GLenum internalFormat = GL_NONE;
 };
 
@@ -97,6 +100,11 @@ struct SamplerOptions {
 	GLenum magFilter = GL_LINEAR;
 	GLenum wrapS = GL_REPEAT;
 	GLenum wrapT = GL_REPEAT;
+
+	/// What a GL_CLAMP_TO_BORDER fetch outside [0, 1] returns. Tutorial 17's
+	/// projected light needs it: clamping to the edge smears a non-black edge
+	/// texel across everything outside the projection.
+	std::array<float, 4> borderColor{0.0F, 0.0F, 0.0F, 0.0F};
 
 	/// 1.0 disables anisotropic filtering. Values above the driver's limit are
 	/// clamped rather than rejected.

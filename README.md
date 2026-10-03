@@ -249,6 +249,11 @@ and clear colour, the maximum frame delta, Escape-to-quit and the frame cap.
 | `tut16_gamma_ramp`                | sRGB textures: the same bytes as `GL_RGB8` vs `GL_SRGB8`, screen-space quads |
 | `tut16_gamma_checkers`            | sRGB and mipmaps: linear- vs gamma-averaged mip chains, shader gamma        |
 | `tut16_gamma_landscape`           | `GL_FRAMEBUFFER_SRGB`, a lit sRGB terrain, lighting hot-reloaded from XML   |
+| `tut17_double_projection`         | Split-screen viewports; rotating clip space after the projection, depth clamp |
+| `tut17_projected_light`           | Projective texturing: a texture as a spotlight, `textureProj`, border clamping |
+
+`demos/projective_texture.html` is a standalone WebGL 2 explainer for Tutorial 17's projective
+texturing: open it in a browser, no build step.
 
 Shared GLSL lives in `assets/shaders/common/` (`lighting.glsl`, `specular.glsl`, `gamma.glsl`) and
 is pulled in with `#include`.

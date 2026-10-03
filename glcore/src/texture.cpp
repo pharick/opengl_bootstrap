@@ -43,6 +43,23 @@ void finishMipLevels(bool hasChain, bool canGenerate) {
 	}
 }
 
+/// The sRGB twin of a block-compressed format: the same blocks, decoded through
+/// the sRGB curve after decompression. GL_NONE when there is none.
+[[nodiscard]] GLenum srgbVariantOfCompressed(GLenum internalFormat) {
+	switch (internalFormat) {
+		case GL_COMPRESSED_RGB_S3TC_DXT1_EXT:
+			return GL_COMPRESSED_SRGB_S3TC_DXT1_EXT;
+		case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
+			return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
+		case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+			return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
+		case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+			return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
+		default:
+			return GL_NONE;
+	}
+}
+
 } // namespace
 
 Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
@@ -64,15 +81,16 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 	const gli::gl converter{gli::gl::PROFILE_GL33};
 	const gli::gl::format format = converter.translate(texture.format(), texture.swizzles());
 	const bool compressed = gli::is_compressed(texture.format());
-	if (compressed && options.internalFormat != GL_NONE) {
+	const auto fileFormat = static_cast<GLenum>(format.Internal);
+	if (compressed && options.internalFormat != GL_NONE && options.internalFormat != fileFormat &&
+	    options.internalFormat != srgbVariantOfCompressed(fileFormat)) {
 		throw std::runtime_error(
-		    std::format("texture '{}' is block-compressed; its internal format cannot be "
-			            "overridden",
-			            path.string()));
+		    std::format("texture '{}' is block-compressed (0x{:04X}); its internal format can "
+			            "only be overridden with its sRGB variant",
+			            path.string(), static_cast<unsigned>(fileFormat)));
 	}
-	const GLenum internalFormat = options.internalFormat != GL_NONE
-	                                  ? options.internalFormat
-	                                  : static_cast<GLenum>(format.Internal);
+	const GLenum internalFormat =
+	    options.internalFormat != GL_NONE ? options.internalFormat : fileFormat;
 
 	Texture handle = Texture::create();
 	glBindTexture(GL_TEXTURE_2D, handle.id());
@@ -93,9 +111,9 @@ Texture loadTexture2D(const fs::path& path, const Texture2DOptions& options) {
 		const auto glLevel = static_cast<GLint>(level);
 
 		if (compressed) {
-			GLC_CHECK(glCompressedTexImage2D(
-			    GL_TEXTURE_2D, glLevel, static_cast<GLenum>(format.Internal), extent.x, extent.y, 0,
-			    static_cast<GLsizei>(texture.size(level)), texture.data(0, 0, level)));
+			GLC_CHECK(glCompressedTexImage2D(GL_TEXTURE_2D, glLevel, internalFormat, extent.x,
+			                                 extent.y, 0, static_cast<GLsizei>(texture.size(level)),
+			                                 texture.data(0, 0, level)));
 		} else {
 			GLC_CHECK(glTexImage2D(GL_TEXTURE_2D, glLevel, static_cast<GLint>(internalFormat),
 			                       extent.x, extent.y, 0, static_cast<GLenum>(format.External),
@@ -234,6 +252,7 @@ Sampler makeSampler(const SamplerOptions& options) {
 	glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, static_cast<GLint>(options.magFilter));
 	glSamplerParameteri(id, GL_TEXTURE_WRAP_S, static_cast<GLint>(options.wrapS));
 	glSamplerParameteri(id, GL_TEXTURE_WRAP_T, static_cast<GLint>(options.wrapT));
+	glSamplerParameterfv(id, GL_TEXTURE_BORDER_COLOR, options.borderColor.data());
 
 	if (options.maxAnisotropy > 1.0F) {
 		const float limit = maxSupportedAnisotropy();

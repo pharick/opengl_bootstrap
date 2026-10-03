@@ -1,0 +1,1859 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Projective texturing, step by step</title>
+        <style>
+            :root {
+                --bg: #14161a;
+                --panel: #1d2026;
+                --panel2: #252932;
+                --line: #333845;
+                --text: #d9dce3;
+                --dim: #8b92a3;
+                --accent: #ffd23f;
+                --blue: #6cb6ff;
+                --red: #ff6b6b;
+                --green: #7bd88f;
+                --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+                background: var(--bg);
+                color: var(--text);
+                font:
+                    14px/1.5 system-ui,
+                    -apple-system,
+                    "Segoe UI",
+                    sans-serif;
+            }
+            body {
+                display: flex;
+                flex-direction: column;
+            }
+            header {
+                padding: 10px 16px;
+                border-bottom: 1px solid var(--line);
+                display: flex;
+                align-items: baseline;
+                gap: 14px;
+                flex-wrap: wrap;
+            }
+            header h1 {
+                font-size: 17px;
+                margin: 0;
+                font-weight: 600;
+            }
+            header a {
+                color: var(--blue);
+            }
+            header .sub {
+                color: var(--dim);
+                font-size: 13px;
+            }
+            main {
+                flex: 1;
+                display: flex;
+                min-height: 0;
+            }
+            #view {
+                flex: 1;
+                position: relative;
+                min-width: 0;
+            }
+            #gl {
+                width: 100%;
+                height: 100%;
+                display: block;
+                cursor: grab;
+            }
+            #gl.aiming {
+                cursor: crosshair;
+            }
+            #insetLabel {
+                position: absolute;
+                color: var(--accent);
+                font-size: 12px;
+                pointer-events: none;
+                text-shadow: 0 1px 2px #000;
+            }
+            #hint {
+                position: absolute;
+                left: 12px;
+                bottom: 10px;
+                color: var(--dim);
+                font-size: 12px;
+                background: rgba(20, 22, 26, 0.75);
+                padding: 4px 8px;
+                border-radius: 4px;
+                pointer-events: none;
+            }
+            aside {
+                width: 440px;
+                flex: none;
+                overflow-y: auto;
+                border-left: 1px solid var(--line);
+                background: var(--panel);
+            }
+            section.card {
+                padding: 12px 16px;
+                border-bottom: 1px solid var(--line);
+            }
+            section.card h2 {
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--dim);
+                margin: 0 0 8px;
+                font-weight: 600;
+            }
+
+            /* tour */
+            #tourNav {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 6px;
+            }
+            #tourNav button {
+                background: var(--panel2);
+                color: var(--text);
+                border: 1px solid var(--line);
+                border-radius: 4px;
+                padding: 3px 10px;
+                cursor: pointer;
+                font: inherit;
+            }
+            #tourNav button:hover {
+                border-color: var(--dim);
+            }
+            #tourDots {
+                display: flex;
+                gap: 5px;
+                flex: 1;
+                justify-content: center;
+            }
+            #tourDots span {
+                width: 9px;
+                height: 9px;
+                border-radius: 50%;
+                background: var(--line);
+                cursor: pointer;
+            }
+            #tourDots span.on {
+                background: var(--accent);
+            }
+            #tourTitle {
+                font-size: 16px;
+                font-weight: 600;
+                margin: 4px 0 6px;
+                color: var(--accent);
+            }
+            #tourText p {
+                margin: 0 0 8px;
+            }
+            #tourText code,
+            .mono {
+                font-family: var(--mono);
+                font-size: 12.5px;
+            }
+            #tourText code {
+                background: var(--panel2);
+                padding: 0 4px;
+                border-radius: 3px;
+            }
+
+            /* pipeline */
+            .stage {
+                display: grid;
+                grid-template-columns: 22px 1fr;
+                gap: 0 6px;
+                padding: 5px 0;
+                border-top: 1px dashed var(--line);
+            }
+            .stage:first-of-type {
+                border-top: none;
+            }
+            .stage .n {
+                color: var(--accent);
+                font-weight: 700;
+                font-family: var(--mono);
+            }
+            .stage .t {
+                font-weight: 600;
+            }
+            .stage .t .op {
+                font-family: var(--mono);
+                color: var(--blue);
+                font-weight: 400;
+            }
+            .stage .v {
+                grid-column: 2;
+                font-family: var(--mono);
+                font-size: 12.5px;
+                white-space: pre-wrap;
+            }
+            .stage .note {
+                grid-column: 2;
+                color: var(--dim);
+                font-size: 12px;
+            }
+            .stage.skip {
+                opacity: 0.45;
+            }
+            .hl {
+                color: var(--accent);
+            }
+            .bad {
+                color: var(--red);
+            }
+            .good {
+                color: var(--green);
+            }
+            #swatch {
+                display: inline-block;
+                width: 26px;
+                height: 14px;
+                vertical-align: -2px;
+                border: 1px solid #666;
+                border-radius: 2px;
+                margin-right: 6px;
+            }
+            details summary {
+                cursor: pointer;
+                color: var(--dim);
+                font-size: 12px;
+                margin-top: 6px;
+            }
+            #matrix {
+                font-family: var(--mono);
+                font-size: 12px;
+                white-space: pre;
+                margin-top: 4px;
+            }
+            #diagram {
+                width: 100%;
+                height: 330px;
+                display: block;
+                background: var(--bg);
+                border-radius: 4px;
+            }
+
+            /* controls */
+            .row {
+                display: grid;
+                grid-template-columns: 128px 1fr 54px;
+                align-items: center;
+                gap: 6px;
+                margin: 3px 0;
+            }
+            .row label {
+                color: var(--dim);
+                font-size: 13px;
+            }
+            .row output {
+                font-family: var(--mono);
+                font-size: 12px;
+                text-align: right;
+            }
+            .row select,
+            .row input[type="range"] {
+                width: 100%;
+            }
+            select {
+                background: var(--panel2);
+                color: var(--text);
+                border: 1px solid var(--line);
+                border-radius: 4px;
+                padding: 2px 4px;
+                font: inherit;
+            }
+            .checks {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 2px 10px;
+                margin-top: 6px;
+            }
+            .checks label {
+                font-size: 13px;
+                cursor: pointer;
+            }
+            .sep {
+                height: 1px;
+                background: var(--line);
+                margin: 8px 0;
+            }
+            #fallback {
+                padding: 40px;
+                color: var(--red);
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>Projective texturing, step by step</h1>
+            <span class="sub"
+                >An interactive companion to gltut
+                <a
+                    href="https://paroj.github.io/gltut/Texturing/Tut17%20Projective%20Texture.html"
+                    target="_blank"
+                    rel="noopener"
+                    >Tutorial 17: Projective Texture</a
+                ></span
+            >
+        </header>
+        <main>
+            <div id="view">
+                <canvas id="gl"></canvas>
+                <div id="insetLabel">Projector's view (the slide overlaid)</div>
+                <div id="hint">
+                    drag: orbit · wheel: zoom · shift-drag or right-drag: aim projector · hover:
+                    follow a point · click: pin it · ← →: tour
+                </div>
+            </div>
+            <aside>
+                <section class="card">
+                    <div id="tourNav">
+                        <button id="prev">‹ Prev</button>
+                        <div id="tourDots"></div>
+                        <button id="next">Next ›</button>
+                    </div>
+                    <div id="tourTitle"></div>
+                    <div id="tourText"></div>
+                </section>
+
+                <section class="card">
+                    <h2>One point, through the pipeline <span id="pinState" class="hl"></span></h2>
+                    <div id="pipeline"></div>
+                    <details>
+                        <summary>The whole chain as one matrix</summary>
+                        <div id="matrix"></div>
+                    </details>
+                </section>
+
+                <section class="card">
+                    <h2>The divide, seen from the side and from above</h2>
+                    <canvas id="diagram"></canvas>
+                </section>
+
+                <section class="card">
+                    <h2>Projector</h2>
+                    <div class="row">
+                        <label>Image</label>
+                        <select id="tex">
+                            <option value="slide">Slide (F, grid, corners)</option>
+                            <option value="checker">Checkerboard</option>
+                            <option value="flashlight">Flashlight</option>
+                            <option value="spots">Coloured spots</option>
+                            <option value="bands">Bands (non-black edge)</option></select
+                        ><span></span>
+                    </div>
+                    <div class="row">
+                        <label>Shading</label>
+                        <select id="mode">
+                            <option value="0">Texture only</option>
+                            <option value="1">As a light (spotlight)</option>
+                            <option value="2">Show (u, v) as colour</option></select
+                        ><span></span>
+                    </div>
+                    <div class="row">
+                        <label>Field of view</label
+                        ><input id="fov" type="range" min="10" max="150" step="1" /><output
+                            id="fovOut"
+                        ></output>
+                    </div>
+                    <div class="row">
+                        <label>Yaw</label
+                        ><input id="yaw" type="range" min="-180" max="180" step="1" /><output
+                            id="yawOut"
+                        ></output>
+                    </div>
+                    <div class="row">
+                        <label>Pitch</label
+                        ><input id="pitch" type="range" min="-85" max="85" step="1" /><output
+                            id="pitchOut"
+                        ></output>
+                    </div>
+                    <div class="row">
+                        <label>Position x</label
+                        ><input id="px" type="range" min="-9" max="9" step="0.1" /><output
+                            id="pxOut"
+                        ></output>
+                    </div>
+                    <div class="row">
+                        <label>Position y</label
+                        ><input id="py" type="range" min="0.5" max="11" step="0.1" /><output
+                            id="pyOut"
+                        ></output>
+                    </div>
+                    <div class="row">
+                        <label>Position z</label
+                        ><input id="pz" type="range" min="-9" max="11" step="0.1" /><output
+                            id="pzOut"
+                        ></output>
+                    </div>
+                    <div class="checks">
+                        <label><input type="checkbox" id="animate" /> Sweep back and forth</label>
+                        <label><input type="checkbox" id="frustum" /> Show frustum</label>
+                        <label><input type="checkbox" id="inset" /> Projector's view</label>
+                        <label><input type="checkbox" id="overlay" /> Overlay slide there</label>
+                    </div>
+
+                    <div class="sep"></div>
+                    <h2>The pipeline's knobs</h2>
+                    <div class="row">
+                        <label>Outside [0, 1]</label>
+                        <select id="wrap">
+                            <option value="0">Clamp to edge</option>
+                            <option value="1">Clamp to border (black)</option>
+                            <option value="2">Repeat</option></select
+                        ><span></span>
+                    </div>
+                    <div class="row">
+                        <label>Triangles per side</label>
+                        <select id="tess">
+                            <option value="1">1 × 1 (two triangles)</option>
+                            <option value="4">4 × 4</option>
+                            <option value="16">16 × 16</option>
+                            <option value="64">64 × 64</option></select
+                        ><span></span>
+                    </div>
+                    <div class="checks">
+                        <label><input type="checkbox" id="bias" /> Bias: [−1, 1] → [0, 1]</label>
+                        <label><input type="checkbox" id="guard" /> Reject w ≤ 0</label>
+                        <label style="grid-column: span 2"
+                            ><input type="checkbox" id="vdiv" /> Divide by w in the vertex shader
+                            (wrong)</label
+                        >
+                    </div>
+                </section>
+            </aside>
+        </main>
+
+        <script>
+            "use strict";
+
+            // ---------------------------------------------------------------------------
+            // Small math library. Matrices are column-major arrays of 16, as in OpenGL.
+            // ---------------------------------------------------------------------------
+            const DEG = Math.PI / 180;
+            const v3 = {
+                add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+                sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+                scale: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
+                dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+                cross: (a, b) => [
+                    a[1] * b[2] - a[2] * b[1],
+                    a[2] * b[0] - a[0] * b[2],
+                    a[0] * b[1] - a[1] * b[0],
+                ],
+                norm: (a) => {
+                    const l = Math.hypot(a[0], a[1], a[2]) || 1;
+                    return [a[0] / l, a[1] / l, a[2] / l];
+                },
+            };
+            const M4 = {
+                ident: () => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+                mul(a, b) {
+                    const o = new Array(16);
+                    for (let c = 0; c < 4; c++)
+                        for (let r = 0; r < 4; r++) {
+                            let s = 0;
+                            for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+                            o[c * 4 + r] = s;
+                        }
+                    return o;
+                },
+                chain: (...ms) => ms.reduce((acc, m) => M4.mul(acc, m)),
+                perspective(fovyDeg, aspect, n, f) {
+                    const t = 1 / Math.tan((fovyDeg * DEG) / 2);
+                    return [
+                        t / aspect,
+                        0,
+                        0,
+                        0,
+                        0,
+                        t,
+                        0,
+                        0,
+                        0,
+                        0,
+                        (f + n) / (n - f),
+                        -1,
+                        0,
+                        0,
+                        (2 * f * n) / (n - f),
+                        0,
+                    ];
+                },
+                lookAt(eye, center, up) {
+                    const f = v3.norm(v3.sub(center, eye));
+                    const s = v3.norm(v3.cross(f, up));
+                    const u = v3.cross(s, f);
+                    return [
+                        s[0],
+                        u[0],
+                        -f[0],
+                        0,
+                        s[1],
+                        u[1],
+                        -f[1],
+                        0,
+                        s[2],
+                        u[2],
+                        -f[2],
+                        0,
+                        -v3.dot(s, eye),
+                        -v3.dot(u, eye),
+                        v3.dot(f, eye),
+                        1,
+                    ];
+                },
+                xform: (m, v) =>
+                    [0, 1, 2, 3].map(
+                        (r) => m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3],
+                    ),
+                invert(a) {
+                    const [
+                        a00,
+                        a01,
+                        a02,
+                        a03,
+                        a10,
+                        a11,
+                        a12,
+                        a13,
+                        a20,
+                        a21,
+                        a22,
+                        a23,
+                        a30,
+                        a31,
+                        a32,
+                        a33,
+                    ] = a;
+                    const b00 = a00 * a11 - a01 * a10,
+                        b01 = a00 * a12 - a02 * a10,
+                        b02 = a00 * a13 - a03 * a10;
+                    const b03 = a01 * a12 - a02 * a11,
+                        b04 = a01 * a13 - a03 * a11,
+                        b05 = a02 * a13 - a03 * a12;
+                    const b06 = a20 * a31 - a21 * a30,
+                        b07 = a20 * a32 - a22 * a30,
+                        b08 = a20 * a33 - a23 * a30;
+                    const b09 = a21 * a32 - a22 * a31,
+                        b10 = a21 * a33 - a23 * a31,
+                        b11 = a22 * a33 - a23 * a32;
+                    const det =
+                        1 / (b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06);
+                    return [
+                        (a11 * b11 - a12 * b10 + a13 * b09) * det,
+                        (a02 * b10 - a01 * b11 - a03 * b09) * det,
+                        (a31 * b05 - a32 * b04 + a33 * b03) * det,
+                        (a22 * b04 - a21 * b05 - a23 * b03) * det,
+                        (a12 * b08 - a10 * b11 - a13 * b07) * det,
+                        (a00 * b11 - a02 * b08 + a03 * b07) * det,
+                        (a32 * b02 - a30 * b05 - a33 * b01) * det,
+                        (a20 * b05 - a22 * b02 + a23 * b01) * det,
+                        (a10 * b10 - a11 * b08 + a13 * b06) * det,
+                        (a01 * b08 - a00 * b10 - a03 * b06) * det,
+                        (a30 * b04 - a31 * b02 + a33 * b00) * det,
+                        (a21 * b02 - a20 * b04 - a23 * b00) * det,
+                        (a11 * b07 - a10 * b09 - a12 * b06) * det,
+                        (a00 * b09 - a01 * b07 + a02 * b06) * det,
+                        (a31 * b01 - a30 * b03 - a32 * b00) * det,
+                        (a20 * b03 - a21 * b01 + a22 * b00) * det,
+                    ];
+                },
+            };
+            /// translate(0.5, 0.5, 0) * scale(0.5, 0.5, 1): NDC [-1, 1] to texture [0, 1].
+            const BIAS = [0.5, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, 1, 0, 0.5, 0.5, 0, 1];
+
+            // ---------------------------------------------------------------------------
+            // State. Everything the UI and the tour can change lives here.
+            // ---------------------------------------------------------------------------
+            const DEFAULTS = {
+                tex: "slide",
+                mode: 0,
+                fov: 50,
+                yaw: 0,
+                pitch: -14,
+                px: 0,
+                py: 5,
+                pz: 3,
+                wrap: 1,
+                tess: 16,
+                bias: true,
+                guard: true,
+                vdiv: false,
+                animate: false,
+                frustum: true,
+                inset: true,
+                overlay: true,
+            };
+            const DEFAULT_CAMERA = { target: [0, 3, -2], yaw: 40, pitch: 24, dist: 31 };
+            let state = { ...DEFAULTS };
+            const cam = { ...DEFAULT_CAMERA, target: [...DEFAULT_CAMERA.target] };
+            let pinned = null; // world point the user clicked, or null
+            let hovered = null; // world point under the mouse
+            let animBaseYaw = 0;
+
+            // ---------------------------------------------------------------------------
+            // The tour: each step sets up the scene to show one idea.
+            // ---------------------------------------------------------------------------
+            const TOUR = [
+                {
+                    title: "1. A slide projector, run backwards",
+                    text: `<p>Projective texturing makes a 2D image look as if a projector cast it onto the scene.
+			The yellow pyramid is the projector's <b>frustum</b>; the small picture inside it is the
+			<b>slide</b>.</p>
+			<p>The trick is to think <b>backwards</b>. Light is never pushed out into the scene. Instead,
+			every surface point asks: <i>"if I looked back at the projector, where on its slide would
+			I land?"</i> and reads that texel. Asking that question is exactly what a camera does — so
+			the projector is simply <b>a second camera</b>.</p>`,
+                    state: {},
+                },
+                {
+                    title: "2. The projector is a camera",
+                    text: `<p>The inset (top right) renders the scene <b>from the projector</b>, with its slide laid
+			over the top. From there the projected image lines up perfectly with the overlay, however
+			bumpy the geometry is: each pixel of that view <i>is</i> one texel of the slide.</p>
+			<p>From any other viewpoint the same image stretches and breaks across the box and the
+			wall — exactly like a real projector hitting uneven surfaces. Shift-drag to aim the
+			projector and watch both views.</p>`,
+                    state: {},
+                    camera: { target: [0, 3, -4], yaw: 82, pitch: 14, dist: 27 },
+                },
+                {
+                    title: "3. Follow one point",
+                    text: `<p>Hover over any surface (click to pin it). The panel below follows that point through
+			the chain:</p>
+			<p><code>world → V (projector view) → P (projection) → B (bias) → ÷ w → texel</code></p>
+			<p>The white line runs from the point back to the projector; where it crosses the slide is
+			the texel that lights the point. The side and top views show the same thing in 2D: the
+			divide by <code>w</code> slides the point along that line onto the slide's plane.</p>
+			<p>In the shader, <code>M = B·P·V</code> is a single matrix multiply per vertex; the book
+			builds it from camera space, so it gets one more factor, <code>C⁻¹</code>.</p>`,
+                    state: {},
+                },
+                {
+                    title: "4. Divide last, per fragment",
+                    text: `<p>Here the divide by <code>w</code> is done in the <b>vertex shader</b> and the result is
+			interpolated. The walls are a few huge triangles, so the error is plain: the checkerboard's
+			straight lines bend and kink along the triangle diagonals. The floor, whose far corners are
+			behind the projector, falls apart entirely.</p>
+			<p>Why: <code>(s, t, q)</code> vary linearly across a surface, but <code>s/q</code> does
+			not. The GPU's interpolation is perspective-correct for the <i>viewing</i> camera's
+			<code>w</code>, not the projector's. So pass the undivided <code>vec4</code> and divide per
+			fragment — that is what <code>textureProj(tex, coord.xyw)</code> does.</p>
+			<p>Raise "Triangles per side": the error shrinks but never disappears. Untick the box to fix
+			it outright.</p>`,
+                    state: {
+                        tex: "checker",
+                        vdiv: true,
+                        tess: 1,
+                        fov: 60,
+                        px: -6,
+                        py: 6,
+                        pz: 4,
+                        yaw: 32,
+                        pitch: -12,
+                    },
+                    camera: { target: [0, 4, -7], yaw: 12, pitch: 12, dist: 25 },
+                },
+                {
+                    title: "5. From [−1, 1] to [0, 1]",
+                    text: `<p>After the divide the frustum spans <code>[−1, 1]</code> in x and y — but textures are
+			addressed in <code>[0, 1]</code>. The bias matrix
+			<code>B = translate(½, ½, 0) · scale(½, ½, 1)</code> fixes that.</p>
+			<p>It is applied <i>before</i> the divide, which is fine because it leaves <code>w</code>
+			alone: <code>(½x + ½w) / w = ½·(x/w) + ½</code>. Same reason the book's Double Projection
+			can rotate after the projection.</p>
+			<p>It is switched off right now: the whole slide is squeezed into the frustum's upper-right
+			quarter, and the rest is outside <code>[0, 1]</code>.</p>`,
+                    state: { bias: false },
+                },
+                {
+                    title: "6. Behind the projector",
+                    text: `<p>The divide doesn't know which side of the projector a point is on. Points behind it
+			have <code>w &lt; 0</code>, and dividing by a negative number flips them through the
+			centre: a mirrored, upside-down copy of the slide lands on the box and floor
+			<b>behind</b> the projector.</p>
+			<p>There is no clipping for the texture projection, so the shader clips by hand with one
+			test: <code>w &gt; 0 ? light : 0</code>. Tick "Reject w ≤ 0" to see it vanish.</p>`,
+                    state: { guard: false, fov: 90, px: 0, py: 4, pz: 2, yaw: 0, pitch: -5 },
+                    camera: { target: [1, 2, 4], yaw: 125, pitch: 30, dist: 26 },
+                    point: [2.6, 1.6, 7],
+                },
+                {
+                    title: "7. Outside the frustum",
+                    text: `<p>Beyond the frustum's sides, <code>u</code> and <code>v</code> leave <code>[0, 1]</code>
+			and the sampler's wrap mode decides what comes back. This image's edge texels are not
+			black, so <b>clamp to edge</b> smears them across the whole room.</p>
+			<p>The book's fix is <code>GL_CLAMP_TO_BORDER</code> with a black border colour. (WebGL 2
+			has no border mode, so this demo does that test in the fragment shader.) Try the three
+			options.</p>`,
+                    state: { tex: "bands", wrap: 0, fov: 40 },
+                    point: [-7, 0, -6],
+                },
+                {
+                    title: "8. Turn it into a light",
+                    text: `<p>Finally, use the texel as a <b>light intensity</b>. Give the projector a position, and it
+			becomes a spotlight: light direction and distance falloff come from that position, and the
+			texture shapes the beam.</p>
+			<p>A disc makes a flashlight; coloured spots make a light no simple formula would. It is just
+			a few matrix multiplies, one divide and one texture fetch per fragment — which is why
+			projected textures were once the standard cheap spotlight.</p>`,
+                    state: {
+                        mode: 1,
+                        tex: "flashlight",
+                        wrap: 1,
+                        fov: 45,
+                        px: -3,
+                        py: 7,
+                        pz: 5,
+                        yaw: 16,
+                        pitch: -24,
+                    },
+                },
+            ];
+            let tourIndex = 0;
+
+            // ---------------------------------------------------------------------------
+            // WebGL setup.
+            // ---------------------------------------------------------------------------
+            const canvas = document.getElementById("gl");
+            const gl = canvas.getContext("webgl2", { antialias: true });
+            if (!gl) {
+                document.getElementById("view").innerHTML =
+                    '<div id="fallback">This demo needs WebGL 2, which this browser does not provide.</div>';
+                throw new Error("WebGL 2 unavailable");
+            }
+
+            function compile(vsSrc, fsSrc) {
+                const make = (type, src) => {
+                    const s = gl.createShader(type);
+                    gl.shaderSource(s, src);
+                    gl.compileShader(s);
+                    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+                        throw new Error(gl.getShaderInfoLog(s));
+                    return s;
+                };
+                const p = gl.createProgram();
+                gl.attachShader(p, make(gl.VERTEX_SHADER, vsSrc));
+                gl.attachShader(p, make(gl.FRAGMENT_SHADER, fsSrc));
+                gl.linkProgram(p);
+                if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+                    throw new Error(gl.getProgramInfoLog(p));
+                const uniforms = {};
+                const count = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+                for (let i = 0; i < count; i++) {
+                    const name = gl.getActiveUniform(p, i).name;
+                    uniforms[name] = gl.getUniformLocation(p, name);
+                }
+                return { program: p, u: uniforms };
+            }
+
+            // The scene shader: the book's projLight shaders, plus switches for each
+            // mistake the tour demonstrates.
+            const sceneProg = compile(
+                `#version 300 es
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec3 aColor;
+uniform mat4 uViewProj;
+uniform mat4 uTexMat;      // world -> projector texture space: B * P * V
+out vec3 vWorld;
+out vec3 vNormal;
+out vec3 vColor;
+out vec4 vProj;            // undivided: interpolated, then divided per fragment
+out vec3 vProjDivided;     // divided per vertex: the wrong way, for comparison
+void main() {
+	vWorld = aPos;
+	vNormal = aNormal;
+	vColor = aColor;
+	vProj = uTexMat * vec4(aPos, 1.0);
+	vProjDivided = vec3(vProj.xy / vProj.w, vProj.w);
+	gl_Position = uViewProj * vec4(aPos, 1.0);
+}`,
+                `#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec3 vColor;
+in vec4 vProj;
+in vec3 vProjDivided;
+uniform sampler2D uTex;
+uniform int uMode;         // 0 texture only, 1 as a light, 2 (u, v) as colour
+uniform int uWrap;         // 0 edge, 1 border, 2 repeat (0 and 2 are the sampler's)
+uniform bool uGuard;
+uniform bool uVertexDivide;
+uniform vec3 uLightPos;
+out vec4 outColor;
+
+vec3 fetch(vec2 uv) {
+	bool outside = any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)));
+	if (uWrap == 1 && outside) return vec3(0.0);   // what GL_CLAMP_TO_BORDER would do
+	return texture(uTex, uv).rgb;
+}
+
+void main() {
+	vec2 uv;
+	float w;
+	if (uVertexDivide) {
+		uv = vProjDivided.xy;
+		w = vProjDivided.z;
+	} else {
+		uv = vProj.xy / vProj.w;                    // textureProj(uTex, vProj.xyw)
+		w = vProj.w;
+	}
+	bool behind = w <= 0.0;
+	vec3 projected = fetch(uv);
+	if (uGuard && behind) projected = vec3(0.0);
+
+	// Faint 1-unit grid lines, so surfaces read as 3D.
+	vec3 n = abs(normalize(vNormal));
+	vec3 g = abs(fract(vWorld - 0.5) - 0.5) / max(fwidth(vWorld), vec3(1e-4)) + n * 1e4;
+	vec3 albedo = vColor * mix(0.8, 1.0, clamp(min(min(g.x, g.y), g.z), 0.0, 1.0));
+
+	vec3 color;
+	if (uMode == 0) {
+		color = albedo * (0.45 + 0.85 * projected);
+	} else if (uMode == 1) {
+		vec3 toLight = uLightPos - vWorld;
+		float d2 = dot(toLight, toLight);
+		float cosIncidence = max(dot(normalize(vNormal), toLight * inversesqrt(d2)), 0.0);
+		float attenuation = 1.0 / (1.0 + d2 / 500.0);
+		color = albedo * (0.16 + 3.0 * projected * cosIncidence * attenuation);
+	} else {
+		bool outside = any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)));
+		vec2 c = clamp(uv, 0.0, 1.0);
+		color = vec3(c, 0.0) * (outside ? 0.25 : 1.0);
+		if (behind) color = mix(color, vec3(0.25, 0.35, 1.0), uGuard ? 0.25 : 0.65);
+		color = mix(color, albedo * 0.3, 0.15);
+	}
+	outColor = vec4(color, 1.0);
+}`,
+            );
+
+            const lineProg = compile(
+                `#version 300 es
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec4 aColor;
+uniform mat4 uViewProj;
+out vec4 vColor;
+void main() { vColor = aColor; gl_Position = uViewProj * vec4(aPos, 1.0); }`,
+                `#version 300 es
+precision mediump float;
+in vec4 vColor;
+out vec4 outColor;
+void main() { outColor = vColor; }`,
+            );
+
+            const quadProg = compile(
+                `#version 300 es
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aUV;
+uniform mat4 uViewProj;
+out vec2 vUV;
+void main() { vUV = aUV; gl_Position = uViewProj * vec4(aPos, 1.0); }`,
+                `#version 300 es
+precision mediump float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform int uWrap;
+uniform float uAlpha;
+out vec4 outColor;
+void main() {
+	bool outside = any(lessThan(vUV, vec2(0.0))) || any(greaterThan(vUV, vec2(1.0)));
+	vec3 c = (uWrap == 1 && outside) ? vec3(0.0) : texture(uTex, vUV).rgb;
+	outColor = vec4(c, uAlpha);
+}`,
+            );
+
+            // ---------------------------------------------------------------------------
+            // Scene geometry: a room of axis-aligned boxes, so picking is a slab test.
+            // ---------------------------------------------------------------------------
+            const PLANES = [
+                // origin, edge a, edge b, normal, colour, picking box
+                {
+                    o: [-10, 0, -10],
+                    a: [20, 0, 0],
+                    b: [0, 0, 22],
+                    n: [0, 1, 0],
+                    c: [0.72, 0.68, 0.6],
+                    box: [
+                        [-10, -0.01, -10],
+                        [10, 0, 12],
+                    ],
+                },
+                {
+                    o: [-10, 0, -10],
+                    a: [20, 0, 0],
+                    b: [0, 12, 0],
+                    n: [0, 0, 1],
+                    c: [0.66, 0.7, 0.76],
+                    box: [
+                        [-10, 0, -10.01],
+                        [10, 12, -10],
+                    ],
+                },
+                {
+                    o: [-10, 0, -10],
+                    a: [0, 0, 22],
+                    b: [0, 12, 0],
+                    n: [1, 0, 0],
+                    c: [0.7, 0.7, 0.72],
+                    box: [
+                        [-10.01, 0, -10],
+                        [-10, 12, 12],
+                    ],
+                },
+            ];
+            const BOXES = [
+                { min: [-2, 0, -4], max: [1.5, 3, -1], c: [0.88, 0.58, 0.42] },
+                { min: [3, 0, -7.5], max: [5.5, 6, -5], c: [0.52, 0.74, 0.56] },
+                { min: [-7, 0, -3], max: [-4.5, 1.6, 1], c: [0.56, 0.62, 0.88] },
+                { min: [1, 0, 7], max: [4.5, 3, 10], c: [0.84, 0.78, 0.46] }, // behind the projector
+            ];
+            const PICK_BOXES = [...PLANES.map((p) => p.box), ...BOXES.map((b) => [b.min, b.max])];
+
+            function buildSceneMesh(tess) {
+                const verts = [],
+                    indices = [];
+                const quad = (o, a, b, n, c) => {
+                    const base = verts.length / 9;
+                    for (let j = 0; j <= tess; j++)
+                        for (let i = 0; i <= tess; i++) {
+                            const s = i / tess,
+                                t = j / tess;
+                            verts.push(
+                                o[0] + a[0] * s + b[0] * t,
+                                o[1] + a[1] * s + b[1] * t,
+                                o[2] + a[2] * s + b[2] * t,
+                                ...n,
+                                ...c,
+                            );
+                        }
+                    for (let j = 0; j < tess; j++)
+                        for (let i = 0; i < tess; i++) {
+                            const k = base + j * (tess + 1) + i;
+                            indices.push(k, k + 1, k + tess + 2, k, k + tess + 2, k + tess + 1);
+                        }
+                };
+                for (const p of PLANES) quad(p.o, p.a, p.b, p.n, p.c);
+                for (const { min, max, c } of BOXES) {
+                    const [dx, dy, dz] = v3.sub(max, min);
+                    quad([max[0], min[1], min[2]], [0, 0, dz], [0, dy, 0], [1, 0, 0], c);
+                    quad(min, [0, 0, dz], [0, dy, 0], [-1, 0, 0], c);
+                    quad([min[0], max[1], min[2]], [dx, 0, 0], [0, 0, dz], [0, 1, 0], c);
+                    quad([min[0], min[1], max[2]], [dx, 0, 0], [0, dy, 0], [0, 0, 1], c);
+                    quad(min, [dx, 0, 0], [0, dy, 0], [0, 0, -1], c);
+                }
+                const vao = gl.createVertexArray();
+                gl.bindVertexArray(vao);
+                const vbo = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+                for (let i = 0; i < 3; i++) {
+                    gl.enableVertexAttribArray(i);
+                    gl.vertexAttribPointer(i, 3, gl.FLOAT, false, 36, i * 12);
+                }
+                const ibo = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
+                gl.bindVertexArray(null);
+                return { vao, vbo, ibo, count: indices.length };
+            }
+            let sceneMesh = null;
+            let sceneTess = 0;
+            function ensureSceneMesh() {
+                if (sceneTess === state.tess) return;
+                if (sceneMesh) {
+                    gl.deleteVertexArray(sceneMesh.vao);
+                    gl.deleteBuffer(sceneMesh.vbo);
+                    gl.deleteBuffer(sceneMesh.ibo);
+                }
+                sceneMesh = buildSceneMesh(state.tess);
+                sceneTess = state.tess;
+            }
+
+            // Dynamic buffers for lines and textured quads, refilled every frame.
+            function dynamicVao(layout) {
+                const vao = gl.createVertexArray();
+                gl.bindVertexArray(vao);
+                const vbo = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+                const stride = layout.reduce((a, b) => a + b, 0) * 4;
+                let offset = 0;
+                layout.forEach((size, i) => {
+                    gl.enableVertexAttribArray(i);
+                    gl.vertexAttribPointer(i, size, gl.FLOAT, false, stride, offset);
+                    offset += size * 4;
+                });
+                gl.bindVertexArray(null);
+                return { vao, vbo, floatsPerVertex: stride / 4 };
+            }
+            const lineBuf = dynamicVao([3, 4]);
+            const quadBuf = dynamicVao([3, 2]);
+
+            function drawLines(data, viewProj, depthTest) {
+                if (!data.length) return;
+                gl.useProgram(lineProg.program);
+                gl.uniformMatrix4fv(lineProg.u.uViewProj, false, viewProj);
+                gl.bindVertexArray(lineBuf.vao);
+                gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf.vbo);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW);
+                if (!depthTest) gl.disable(gl.DEPTH_TEST);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+                gl.drawArrays(gl.LINES, 0, data.length / lineBuf.floatsPerVertex);
+                gl.disable(gl.BLEND);
+                gl.enable(gl.DEPTH_TEST);
+            }
+
+            /// Two triangles from four corners given in order around the quad.
+            function drawQuad(corners, uvs, viewProj, alpha, additive) {
+                const data = [];
+                for (const k of [0, 1, 2, 0, 2, 3]) data.push(...corners[k], ...uvs[k]);
+                gl.useProgram(quadProg.program);
+                gl.uniformMatrix4fv(quadProg.u.uViewProj, false, viewProj);
+                gl.uniform1i(quadProg.u.uTex, 0);
+                gl.uniform1i(quadProg.u.uWrap, state.wrap);
+                gl.uniform1f(quadProg.u.uAlpha, alpha);
+                gl.bindVertexArray(quadBuf.vao);
+                gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf.vbo);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW);
+                gl.enable(gl.BLEND);
+                if (additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+                else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                gl.disable(gl.BLEND);
+            }
+
+            // ---------------------------------------------------------------------------
+            // Projected images, drawn with the 2D canvas. Canvas row 0 is the top; the
+            // upload flips it, so texture v = 0 is the bottom, as in GL.
+            // ---------------------------------------------------------------------------
+            const TEX_SIZE = 512;
+            function makeImage(kind) {
+                const c = document.createElement("canvas");
+                c.width = c.height = TEX_SIZE;
+                const g = c.getContext("2d");
+                const S = TEX_SIZE;
+                g.fillStyle = "#000";
+                g.fillRect(0, 0, S, S);
+                if (kind === "slide") {
+                    g.strokeStyle = "rgba(90, 200, 255, 0.6)";
+                    g.lineWidth = 2;
+                    for (let i = 1; i < 8; i++) {
+                        g.beginPath();
+                        g.moveTo((i * S) / 8, 10);
+                        g.lineTo((i * S) / 8, S - 10);
+                        g.stroke();
+                        g.beginPath();
+                        g.moveTo(10, (i * S) / 8);
+                        g.lineTo(S - 10, (i * S) / 8);
+                        g.stroke();
+                    }
+                    g.strokeStyle = "#ff9f43";
+                    g.lineWidth = 8;
+                    g.strokeRect(14, 14, S - 28, S - 28);
+                    g.fillStyle = "#ffd23f";
+                    g.fillRect(170, 110, 64, 300);
+                    g.fillRect(170, 110, 210, 62);
+                    g.fillRect(170, 236, 160, 56);
+                    g.font = "bold 30px system-ui, sans-serif";
+                    g.fillStyle = "#ff6b6b";
+                    g.fillText("(0,0)", 28, S - 30);
+                    g.fillStyle = "#7bd88f";
+                    g.fillText("(1,0)", S - 108, S - 30);
+                    g.fillStyle = "#6cb6ff";
+                    g.fillText("(0,1)", 28, 54);
+                    g.fillStyle = "#ffffff";
+                    g.fillText("(1,1)", S - 108, 54);
+                } else if (kind === "checker") {
+                    const n = 8,
+                        m = 6,
+                        cell = (S - 2 * m) / n;
+                    for (let j = 0; j < n; j++)
+                        for (let i = 0; i < n; i++) {
+                            g.fillStyle = (i + j) % 2 ? "#f2f2f2" : "#2a2f3a";
+                            g.fillRect(m + i * cell, m + j * cell, cell, cell);
+                        }
+                } else if (kind === "flashlight") {
+                    const r = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S * 0.48);
+                    r.addColorStop(0, "#ffffff");
+                    r.addColorStop(0.45, "#fff3d0");
+                    r.addColorStop(0.8, "#a08050");
+                    r.addColorStop(0.92, "#302010");
+                    r.addColorStop(1, "#000000");
+                    g.fillStyle = r;
+                    g.fillRect(0, 0, S, S);
+                } else if (kind === "spots") {
+                    const spots = [
+                        [0.3, 0.3, "#ff4040"],
+                        [0.7, 0.28, "#40ff60"],
+                        [0.5, 0.55, "#ffffff"],
+                        [0.25, 0.72, "#4080ff"],
+                        [0.75, 0.72, "#ffd040"],
+                        [0.5, 0.18, "#ff40ff"],
+                        [0.5, 0.86, "#40ffff"],
+                    ];
+                    g.globalCompositeOperation = "lighter";
+                    for (const [x, y, col] of spots) {
+                        const r = g.createRadialGradient(x * S, y * S, 0, x * S, y * S, S * 0.13);
+                        r.addColorStop(0, col);
+                        r.addColorStop(1, "rgba(0,0,0,0)");
+                        g.fillStyle = r;
+                        g.fillRect(0, 0, S, S);
+                    }
+                    g.globalCompositeOperation = "source-over";
+                } else if (kind === "bands") {
+                    const cols = [
+                        "#ff5050",
+                        "#ffa040",
+                        "#ffe050",
+                        "#60e070",
+                        "#50c0ff",
+                        "#7070ff",
+                        "#d060ff",
+                        "#ff60a0",
+                    ];
+                    cols.forEach((col, i) => {
+                        g.fillStyle = col;
+                        g.fillRect(0, (i * S) / 8, S, S / 8);
+                    });
+                    g.fillStyle = "rgba(0,0,0,0.35)";
+                    for (let i = 0; i < 8; i++) g.fillRect((i * S) / 8, 0, S / 16, S);
+                }
+                return c;
+            }
+            const images = {};
+            for (const kind of ["slide", "checker", "flashlight", "spots", "bands"]) {
+                const canvas2d = makeImage(kind);
+                const tex = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, tex);
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas2d);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                const pixels = canvas2d
+                    .getContext("2d")
+                    .getImageData(0, 0, TEX_SIZE, TEX_SIZE).data;
+                images[kind] = { tex, pixels };
+            }
+
+            /// The CPU's copy of the shader's fetch, for the panel and the diagram.
+            function sampleImage(u, v) {
+                if (state.wrap === 1 && (u < 0 || u > 1 || v < 0 || v > 1)) return [0, 0, 0];
+                if (state.wrap === 2) {
+                    u -= Math.floor(u);
+                    v -= Math.floor(v);
+                }
+                u = Math.min(Math.max(u, 0), 1);
+                v = Math.min(Math.max(v, 0), 1);
+                const x = Math.min(TEX_SIZE - 1, Math.floor(u * TEX_SIZE));
+                const y = Math.min(TEX_SIZE - 1, Math.floor((1 - v) * TEX_SIZE));
+                const p = images[state.tex].pixels,
+                    i = (y * TEX_SIZE + x) * 4;
+                return [p[i], p[i + 1], p[i + 2]];
+            }
+
+            // ---------------------------------------------------------------------------
+            // The projector: a camera with a position, yaw, pitch and field of view.
+            // ---------------------------------------------------------------------------
+            const SLIDE_DISTANCE = 1.6;
+            const FRUSTUM_LENGTH = 40;
+
+            function projector() {
+                const pos = [state.px, state.py, state.pz];
+                const y = state.yaw * DEG,
+                    p = state.pitch * DEG;
+                const forward = [
+                    Math.sin(y) * Math.cos(p),
+                    Math.sin(p),
+                    -Math.cos(y) * Math.cos(p),
+                ];
+                const view = M4.lookAt(pos, v3.add(pos, forward), [0, 1, 0]);
+                const proj = M4.perspective(state.fov, 1, 0.5, 100); // near/far: irrelevant, z is unused
+                const toWorld = M4.invert(view);
+                const texMat = state.bias ? M4.chain(BIAS, proj, view) : M4.mul(proj, view);
+                const tanHalf = Math.tan((state.fov * DEG) / 2);
+                const lightToWorld = (x, yy, z) => M4.xform(toWorld, [x, yy, z, 1]).slice(0, 3);
+                return { pos, forward, view, proj, texMat, tanHalf, lightToWorld };
+            }
+
+            /// Every stage of the chain for one world point.
+            function trace(P, pj) {
+                const world = [...P, 1];
+                const lightView = M4.xform(pj.view, world);
+                const clip = M4.xform(pj.proj, lightView);
+                const biased = state.bias ? M4.xform(BIAS, clip) : clip;
+                const w = biased[3];
+                const uv = [biased[0] / w, biased[1] / w];
+                const ndc = [clip[0] / clip[3], clip[1] / clip[3]];
+                const behind = w <= 0;
+                const outside = uv[0] < 0 || uv[0] > 1 || uv[1] < 0 || uv[1] > 1;
+                let color = sampleImage(uv[0], uv[1]);
+                if (behind && state.guard) color = [0, 0, 0];
+                return { world, lightView, clip, biased, w, uv, ndc, behind, outside, color };
+            }
+
+            // ---------------------------------------------------------------------------
+            // Viewing camera and picking.
+            // ---------------------------------------------------------------------------
+            function cameraMatrices(aspect) {
+                const y = cam.yaw * DEG,
+                    p = cam.pitch * DEG;
+                const eye = v3.add(
+                    cam.target,
+                    v3.scale(
+                        [Math.cos(p) * Math.sin(y), Math.sin(p), Math.cos(p) * Math.cos(y)],
+                        cam.dist,
+                    ),
+                );
+                const view = M4.lookAt(eye, cam.target, [0, 1, 0]);
+                const proj = M4.perspective(50, aspect, 0.3, 300);
+                return { eye, view, proj, viewProj: M4.mul(proj, view) };
+            }
+
+            function rayBox(o, d, [min, max]) {
+                let t0 = -Infinity,
+                    t1 = Infinity;
+                for (let i = 0; i < 3; i++) {
+                    if (Math.abs(d[i]) < 1e-9) {
+                        if (o[i] < min[i] || o[i] > max[i]) return null;
+                        continue;
+                    }
+                    let a = (min[i] - o[i]) / d[i],
+                        b = (max[i] - o[i]) / d[i];
+                    if (a > b) [a, b] = [b, a];
+                    t0 = Math.max(t0, a);
+                    t1 = Math.min(t1, b);
+                    if (t0 > t1) return null;
+                }
+                if (t1 < 0) return null;
+                return t0 >= 0 ? t0 : null;
+            }
+            function castRay(o, d) {
+                let best = Infinity;
+                for (const box of PICK_BOXES) {
+                    const t = rayBox(o, d, box);
+                    if (t !== null && t < best) best = t;
+                }
+                return best === Infinity ? null : v3.add(o, v3.scale(d, best));
+            }
+
+            // ---------------------------------------------------------------------------
+            // Layout, input.
+            // ---------------------------------------------------------------------------
+            let dpr = 1,
+                W = 1,
+                H = 1;
+            const inset = { x: 0, y: 0, s: 0 }; // GL pixels, origin bottom-left
+            function resize() {
+                dpr = window.devicePixelRatio || 1;
+                W = Math.max(1, Math.round(canvas.clientWidth * dpr));
+                H = Math.max(1, Math.round(canvas.clientHeight * dpr));
+                canvas.width = W;
+                canvas.height = H;
+                const margin = Math.round(12 * dpr);
+                inset.s = Math.round(Math.min(W * 0.27, H * 0.36));
+                inset.x = W - inset.s - margin;
+                inset.y = H - inset.s - margin;
+                const label = document.getElementById("insetLabel");
+                label.style.right = `${margin / dpr}px`;
+                label.style.top = `${(margin + inset.s) / dpr + 4}px`;
+                label.style.width = `${inset.s / dpr}px`;
+                const diagram = document.getElementById("diagram");
+                diagram.width = Math.round(diagram.clientWidth * dpr);
+                diagram.height = Math.round(diagram.clientHeight * dpr);
+            }
+            window.addEventListener("resize", resize);
+
+            function overInset(cssX, cssY) {
+                if (!state.inset) return false;
+                const x = cssX * dpr,
+                    y = H - cssY * dpr;
+                return (
+                    x >= inset.x && x <= inset.x + inset.s && y >= inset.y && y <= inset.y + inset.s
+                );
+            }
+            function pickAt(cssX, cssY) {
+                if (overInset(cssX, cssY)) return null;
+                const { viewProj } = cameraMatrices(W / H);
+                const inv = M4.invert(viewProj);
+                const nx = ((cssX * dpr) / W) * 2 - 1,
+                    ny = 1 - ((cssY * dpr) / H) * 2;
+                const a = M4.xform(inv, [nx, ny, -1, 1]),
+                    b = M4.xform(inv, [nx, ny, 1, 1]);
+                const near = v3.scale(a, 1 / a[3]),
+                    far = v3.scale(b, 1 / b[3]);
+                return castRay(near, v3.norm(v3.sub(far, near)));
+            }
+
+            let drag = null;
+            canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+            canvas.addEventListener("pointerdown", (e) => {
+                canvas.setPointerCapture(e.pointerId);
+                drag = { x: e.clientX, y: e.clientY, moved: 0, aim: e.shiftKey || e.button === 2 };
+                canvas.classList.toggle("aiming", drag.aim);
+            });
+            canvas.addEventListener("pointermove", (e) => {
+                const r = canvas.getBoundingClientRect();
+                if (drag) {
+                    const dx = e.clientX - drag.x,
+                        dy = e.clientY - drag.y;
+                    drag.x = e.clientX;
+                    drag.y = e.clientY;
+                    drag.moved += Math.abs(dx) + Math.abs(dy);
+                    if (drag.aim) {
+                        state.yaw = wrapDegrees(state.yaw + dx * 0.25);
+                        state.pitch = Math.max(-85, Math.min(85, state.pitch - dy * 0.25));
+                        animBaseYaw = state.yaw;
+                        syncUI();
+                    } else {
+                        cam.yaw -= dx * 0.3;
+                        cam.pitch = Math.max(-5, Math.min(85, cam.pitch + dy * 0.3));
+                    }
+                } else if (!pinned) {
+                    hovered = pickAt(e.clientX - r.left, e.clientY - r.top) || hovered;
+                }
+            });
+            canvas.addEventListener("pointerup", (e) => {
+                if (drag && drag.moved < 4 && e.button === 0 && !drag.aim) {
+                    const r = canvas.getBoundingClientRect();
+                    const hit = pickAt(e.clientX - r.left, e.clientY - r.top);
+                    pinned = hit;
+                    if (hit) hovered = hit;
+                }
+                drag = null;
+                canvas.classList.remove("aiming");
+            });
+            canvas.addEventListener(
+                "wheel",
+                (e) => {
+                    e.preventDefault();
+                    cam.dist = Math.max(6, Math.min(80, cam.dist * Math.exp(e.deltaY * 0.001)));
+                },
+                { passive: false },
+            );
+            window.addEventListener("keydown", (e) => {
+                if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+                if (e.key === "ArrowRight") goToStep(Math.min(tourIndex + 1, TOUR.length - 1));
+                if (e.key === "ArrowLeft") goToStep(Math.max(tourIndex - 1, 0));
+            });
+            const wrapDegrees = (d) => d - 360 * Math.floor((d + 180) / 360);
+
+            // ---------------------------------------------------------------------------
+            // UI binding.
+            // ---------------------------------------------------------------------------
+            const RANGES = { fov: "°", yaw: "°", pitch: "°", px: "", py: "", pz: "" };
+            const CHECKS = ["animate", "frustum", "inset", "overlay", "bias", "guard", "vdiv"];
+            const SELECTS = { tex: String, mode: Number, wrap: Number, tess: Number };
+            function syncUI() {
+                for (const [k, unit] of Object.entries(RANGES)) {
+                    document.getElementById(k).value = state[k];
+                    document.getElementById(k + "Out").textContent =
+                        `${(+state[k]).toFixed(unit ? 0 : 1)}${unit}`;
+                }
+                for (const k of CHECKS) document.getElementById(k).checked = state[k];
+                for (const k of Object.keys(SELECTS))
+                    document.getElementById(k).value = String(state[k]);
+                document.getElementById("insetLabel").style.display = state.inset ? "" : "none";
+            }
+            for (const k of Object.keys(RANGES)) {
+                document.getElementById(k).addEventListener("input", (e) => {
+                    state[k] = +e.target.value;
+                    if (k === "yaw") animBaseYaw = state.yaw;
+                    syncUI();
+                });
+            }
+            for (const k of CHECKS) {
+                document.getElementById(k).addEventListener("change", (e) => {
+                    state[k] = e.target.checked;
+                    if (k === "animate") {
+                        animBaseYaw = state.yaw;
+                        animStart = performance.now();
+                    }
+                    syncUI();
+                });
+            }
+            for (const [k, conv] of Object.entries(SELECTS)) {
+                document.getElementById(k).addEventListener("change", (e) => {
+                    state[k] = conv(e.target.value);
+                });
+            }
+
+            function goToStep(i) {
+                tourIndex = i;
+                const step = TOUR[i];
+                state = { ...DEFAULTS, ...step.state };
+                const c = step.camera || DEFAULT_CAMERA;
+                Object.assign(cam, c, { target: [...c.target] });
+                animBaseYaw = state.yaw;
+                pinned = step.point ? [...step.point] : null;
+                hovered = pinned;
+                document.getElementById("tourTitle").textContent = step.title;
+                document.getElementById("tourText").innerHTML = step.text;
+                document
+                    .querySelectorAll("#tourDots span")
+                    .forEach((d, k) => d.classList.toggle("on", k === i));
+                syncUI();
+            }
+            const dots = document.getElementById("tourDots");
+            TOUR.forEach((step, i) => {
+                const d = document.createElement("span");
+                d.title = step.title;
+                d.addEventListener("click", () => goToStep(i));
+                dots.appendChild(d);
+            });
+            document
+                .getElementById("prev")
+                .addEventListener("click", () => goToStep(Math.max(tourIndex - 1, 0)));
+            document
+                .getElementById("next")
+                .addEventListener("click", () =>
+                    goToStep(Math.min(tourIndex + 1, TOUR.length - 1)),
+                );
+
+            // ---------------------------------------------------------------------------
+            // The pipeline panel.
+            // ---------------------------------------------------------------------------
+            const fmt = (n) => (Math.abs(n) > 999 ? n.toExponential(1) : n.toFixed(2)).padStart(7);
+            const vec = (a, names) =>
+                "(" +
+                a.map((x, i) => (names ? names[i] + " " : "") + fmt(x).trim()).join(",  ") +
+                ")";
+            let lastPanelKey = "";
+            function updatePanel(pj, tr) {
+                const key = JSON.stringify([state, tr ? tr.world : null]);
+                if (key === lastPanelKey) return;
+                lastPanelKey = key;
+                document.getElementById("pinState").textContent = pinned ? "· pinned" : "";
+                const el = document.getElementById("pipeline");
+                if (!tr) {
+                    el.innerHTML = `<div class="note">Hover over a surface to follow a point.</div>`;
+                    return;
+                }
+                const [u, v] = tr.uv;
+                const swatch = `rgb(${tr.color.join(",")})`;
+                let verdict;
+                if (tr.behind) {
+                    verdict = state.guard
+                        ? `<span class="good">w ≤ 0: behind the projector — rejected, no light.</span>`
+                        : `<span class="bad">w ≤ 0: behind the projector! The divide flips it, so it picks up a mirrored texel.</span>`;
+                } else if (tr.outside) {
+                    verdict = `<span class="bad">Outside [0, 1]: outside the frustum. ${
+                        [
+                            "Clamp to edge repeats the edge texel.",
+                            "Clamp to border gives black.",
+                            "Repeat tiles the image.",
+                        ][state.wrap]
+                    }</span>`;
+                } else {
+                    verdict = `<span class="good">Inside the frustum: this texel lights the point.</span>`;
+                }
+                const divideNote = state.vdiv
+                    ? `<span class="bad">This is the exact per-pixel answer. The scene, dividing per vertex, shows an interpolated approximation.</span>`
+                    : `What <span class="mono">textureProj(tex, coord.xyw)</span> does, per fragment.`;
+                el.innerHTML = `
+	<div class="stage"><span class="n">1</span><span class="t">World position</span>
+		<span class="v">P = ${vec(tr.world, ["x", "y", "z", "w"])}</span></div>
+	<div class="stage"><span class="n">2</span><span class="t">Projector view <span class="op">V · P</span></span>
+		<span class="v">  = ${vec(tr.lightView)}</span>
+		<span class="note">The projector at the origin, looking down −z. Depth in front = −z = <span class="hl">${fmt(-tr.lightView[2]).trim()}</span></span></div>
+	<div class="stage"><span class="n">3</span><span class="t">Projector clip space <span class="op">P · …</span></span>
+		<span class="v">  = ${vec(tr.clip, ["x", "y", "z", "w"])}</span>
+		<span class="note">The projection copies depth into <b>w</b> (w = −z). x and y are scaled by
+			1/tan(fov/2) = ${(1 / pj.tanHalf).toFixed(2)}. z is never used.</span></div>
+	<div class="stage ${state.bias ? "" : "skip"}"><span class="n">4</span><span class="t">Bias <span class="op">B · …</span></span>
+		<span class="v">  = ${state.bias ? vec(tr.biased, ["s", "t", "r", "q"]) : "(skipped)"}</span>
+		<span class="note">s = ½x + ½w, t = ½y + ½w, q = w untouched — so it commutes with the divide.</span></div>
+	<div class="stage"><span class="n">5</span><span class="t">Divide by w</span>
+		<span class="v">(u, v) = (${fmt(tr.biased[0]).trim()} / ${fmt(tr.w).trim()},  ${fmt(tr.biased[1]).trim()} / ${fmt(tr.w).trim()}) = <span class="hl">(${fmt(u).trim()}, ${fmt(v).trim()})</span></span>
+		<span class="note">${divideNote}</span></div>
+	<div class="stage"><span class="n">6</span><span class="t">Fetch the texel</span>
+		<span class="v"><span id="swatch" style="background:${swatch}"></span>rgb(${tr.color.join(", ")})</span>
+		<span class="note">${verdict}</span></div>`;
+
+                const M = pj.texMat;
+                const rows = [0, 1, 2, 3].map(
+                    (r) => "│" + [0, 1, 2, 3].map((c) => fmt(M[c * 4 + r])).join(" ") + " │",
+                );
+                document.getElementById("matrix").textContent =
+                    `M = ${state.bias ? "B · " : ""}P · V   (world → projector texture space)\n` +
+                    rows.join("\n") +
+                    `\n\nThe book starts from the viewing camera's space instead,\nso its matrix is ${state.bias ? "B · " : ""}P · V · C⁻¹, with C the world-to-camera matrix.`;
+            }
+
+            // ---------------------------------------------------------------------------
+            // The side/top diagram: the divide as sliding along a ray onto the slide.
+            // ---------------------------------------------------------------------------
+            const diagram = document.getElementById("diagram");
+            const dctx = diagram.getContext("2d");
+            function drawDiagram(pj, tr) {
+                const w = diagram.width,
+                    h = diagram.height;
+                dctx.clearRect(0, 0, w, h);
+                const half = h / 2;
+                if (!tr) return;
+                const depth = -tr.lightView[2];
+                drawDiagramPanel(
+                    0,
+                    0,
+                    w,
+                    half - 2,
+                    "Side view: height y against depth",
+                    depth,
+                    tr.lightView[1],
+                    "y",
+                    (t) => sampleImage(clampUV(tr.uv[0]), t),
+                    pj,
+                );
+                drawDiagramPanel(
+                    0,
+                    half + 2,
+                    w,
+                    half - 2,
+                    "Top view: sideways x against depth",
+                    depth,
+                    tr.lightView[0],
+                    "x",
+                    (t) => sampleImage(t, clampUV(tr.uv[1])),
+                    pj,
+                );
+            }
+            const clampUV = (x) => (state.wrap === 2 ? x : Math.min(Math.max(x, 0), 1));
+
+            function drawDiagramPanel(x0, y0, w, h, title, depth, lat, axis, sampleAlong, pj) {
+                const c = dctx,
+                    k = dpr;
+                c.save();
+                c.beginPath();
+                c.rect(x0, y0, w, h);
+                c.clip();
+                c.fillStyle = "#181b20";
+                c.fillRect(x0, y0, w, h);
+                const dMax = Math.max(8, depth * 1.2);
+                const dMin = Math.min(-2.5, depth * 1.25);
+                const tanH = pj.tanHalf;
+                const yR = Math.max(Math.abs(lat) * 1.3, 4, Math.min(tanH * dMax * 0.7, 30));
+                const pad = 14 * k;
+                const sx = (d) => x0 + pad + ((d - dMin) / (dMax - dMin)) * (w - 2 * pad);
+                const sy = (y) => y0 + h / 2 + 6 * k - (y / yR) * (h / 2 - 20 * k);
+                const dPlane = dMax * 0.2;
+
+                // depth axis
+                c.strokeStyle = "#3a404c";
+                c.setLineDash([4 * k, 4 * k]);
+                c.lineWidth = k;
+                c.beginPath();
+                c.moveTo(sx(dMin), sy(0));
+                c.lineTo(sx(dMax), sy(0));
+                c.stroke();
+                c.setLineDash([]);
+
+                // frustum, and the mirrored cone behind when nothing rejects it
+                c.strokeStyle = "rgba(255, 210, 63, 0.8)";
+                c.beginPath();
+                c.moveTo(sx(0), sy(0));
+                c.lineTo(sx(dMax), sy(tanH * dMax));
+                c.moveTo(sx(0), sy(0));
+                c.lineTo(sx(dMax), sy(-tanH * dMax));
+                c.stroke();
+                if (!state.guard) {
+                    c.strokeStyle = "rgba(255, 107, 107, 0.6)";
+                    c.setLineDash([5 * k, 4 * k]);
+                    c.beginPath();
+                    c.moveTo(sx(0), sy(0));
+                    c.lineTo(sx(dMin), sy(tanH * dMin));
+                    c.moveTo(sx(0), sy(0));
+                    c.lineTo(sx(dMin), sy(-tanH * dMin));
+                    c.stroke();
+                    c.setLineDash([]);
+                }
+
+                // the slide, drawn as the strip of texels along this axis
+                const top = sy(tanH * dPlane),
+                    bottom = sy(-tanH * dPlane);
+                const steps = Math.max(2, Math.round(Math.abs(bottom - top)));
+                for (let i = 0; i < steps; i++) {
+                    const ndc = 1 - (2 * (i + 0.5)) / steps; // +1 at the top
+                    const t = state.bias ? 0.5 * ndc + 0.5 : ndc;
+                    const [r, g, b] = sampleAlong(t);
+                    c.fillStyle = `rgb(${r},${g},${b})`;
+                    c.fillRect(
+                        sx(dPlane) - 3 * k,
+                        top + ((bottom - top) * i) / steps,
+                        6 * k,
+                        (bottom - top) / steps + 1,
+                    );
+                }
+                c.strokeStyle = "#ff9f43";
+                c.lineWidth = k;
+                c.strokeRect(sx(dPlane) - 3 * k, top, 6 * k, bottom - top);
+
+                // the ray: point -> projector -> slide
+                const hitLat = depth !== 0 ? (lat / depth) * dPlane : 0;
+                const behind = depth <= 0;
+                c.strokeStyle = behind
+                    ? state.guard
+                        ? "rgba(255,255,255,0.35)"
+                        : "#ff6b6b"
+                    : "#ffffff";
+                c.lineWidth = 1.5 * k;
+                c.beginPath();
+                c.moveTo(sx(depth), sy(lat));
+                c.lineTo(sx(0), sy(0));
+                c.lineTo(sx(dPlane), sy(hitLat));
+                c.stroke();
+
+                // projector, point, hit
+                c.fillStyle = "#ffd23f";
+                c.beginPath();
+                c.arc(sx(0), sy(0), 4 * k, 0, 2 * Math.PI);
+                c.fill();
+                c.fillStyle = "#ffffff";
+                c.beginPath();
+                c.arc(sx(depth), sy(lat), 4 * k, 0, 2 * Math.PI);
+                c.fill();
+                c.strokeStyle = "#ffffff";
+                c.beginPath();
+                c.arc(sx(dPlane), sy(hitLat), 5 * k, 0, 2 * Math.PI);
+                c.stroke();
+
+                // labels
+                c.font = `${11 * k}px system-ui, sans-serif`;
+                c.fillStyle = "#8b92a3";
+                c.fillText(title, x0 + 8 * k, y0 + 14 * k);
+                c.fillStyle = "#ffd23f";
+                c.fillText("projector", sx(0) - 22 * k, sy(0) + 16 * k);
+                c.fillStyle = "#ff9f43";
+                c.fillText("slide", sx(dPlane) + 6 * k, top - 4 * k);
+                c.fillStyle = "#ffffff";
+                const ratio = depth !== 0 ? lat / depth : NaN;
+                const label = `P: ${axis} = ${lat.toFixed(2)}, w = ${depth.toFixed(2)}`;
+                const lx = Math.min(sx(depth) + 8 * k, x0 + w - c.measureText(label).width - 6 * k);
+                c.fillText(label, Math.max(x0 + 6 * k, lx), sy(lat) - 8 * k);
+                const ndcAxis = ratio / tanH;
+                const tc = state.bias ? 0.5 * ndcAxis + 0.5 : ndcAxis;
+                const coord = axis === "y" ? "v" : "u";
+                c.fillText(
+                    `${axis}/w = ${ratio.toFixed(2)} → ${coord} = ${tc.toFixed(2)}`,
+                    x0 + 8 * k,
+                    y0 + h - 8 * k,
+                );
+                c.restore();
+            }
+
+            // ---------------------------------------------------------------------------
+            // Rendering.
+            // ---------------------------------------------------------------------------
+            gl.enable(gl.DEPTH_TEST);
+
+            function drawScene(viewProj, pj) {
+                ensureSceneMesh();
+                const img = images[state.tex];
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, img.tex);
+                const wrap = state.wrap === 2 ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+
+                const u = sceneProg.u;
+                gl.useProgram(sceneProg.program);
+                gl.uniformMatrix4fv(u.uViewProj, false, viewProj);
+                gl.uniformMatrix4fv(u.uTexMat, false, pj.texMat);
+                gl.uniform1i(u.uTex, 0);
+                gl.uniform1i(u.uMode, state.mode);
+                gl.uniform1i(u.uWrap, state.wrap);
+                gl.uniform1i(u.uGuard, state.guard ? 1 : 0);
+                gl.uniform1i(u.uVertexDivide, state.vdiv ? 1 : 0);
+                gl.uniform3fv(u.uLightPos, pj.pos);
+                gl.bindVertexArray(sceneMesh.vao);
+                gl.drawElements(gl.TRIANGLES, sceneMesh.count, gl.UNSIGNED_INT, 0);
+            }
+
+            /// Texture coordinates of the slide's corners: [0, 1] normally, [-1, 1]
+            /// without the bias, which is what the projector then effectively shows.
+            function slideUVs() {
+                const lo = state.bias ? 0 : -1;
+                return [
+                    [lo, lo],
+                    [1, lo],
+                    [1, 1],
+                    [lo, 1],
+                ];
+            }
+
+            function pushLine(out, a, b, col) {
+                out.push(...a, ...col, ...b, ...col);
+            }
+
+            function drawProjectorGizmo(viewProj, pj, tr) {
+                const L = pj.lightToWorld,
+                    t = pj.tanHalf;
+                const lines = [],
+                    onTop = [];
+                if (state.frustum) {
+                    const yellow = [1, 0.82, 0.25, 0.75];
+                    const far = FRUSTUM_LENGTH;
+                    const corners = [
+                        [-1, -1],
+                        [1, -1],
+                        [1, 1],
+                        [-1, 1],
+                    ].map(([x, y]) => L(x * t * far, y * t * far, -far));
+                    for (const c of corners) pushLine(lines, pj.pos, c, yellow);
+                    const slide = [
+                        [-1, -1],
+                        [1, -1],
+                        [1, 1],
+                        [-1, 1],
+                    ].map(([x, y]) =>
+                        L(x * t * SLIDE_DISTANCE, y * t * SLIDE_DISTANCE, -SLIDE_DISTANCE),
+                    );
+                    for (let i = 0; i < 4; i++)
+                        pushLine(lines, slide[i], slide[(i + 1) % 4], [1, 0.62, 0.26, 1]);
+                }
+                // the projector body: a small box around its position
+                const b = 0.35,
+                    body = [];
+                for (const x of [-b, b])
+                    for (const y of [-b, b]) for (const z of [-b, b]) body.push(L(x, y, z + b));
+                for (const [i, j] of [
+                    [0, 1],
+                    [2, 3],
+                    [4, 5],
+                    [6, 7],
+                    [0, 2],
+                    [1, 3],
+                    [4, 6],
+                    [5, 7],
+                    [0, 4],
+                    [1, 5],
+                    [2, 6],
+                    [3, 7],
+                ]) {
+                    pushLine(lines, body[i], body[j], [0.9, 0.9, 0.95, 1]);
+                }
+
+                if (tr) {
+                    const P = tr.world.slice(0, 3);
+                    const behind = tr.behind;
+                    const rayColor = behind
+                        ? state.guard
+                            ? [1, 1, 1, 0.3]
+                            : [1, 0.42, 0.42, 1]
+                        : [1, 1, 1, 0.95];
+                    // where the line through the point and the projector crosses the slide
+                    const hit = L(
+                        tr.ndc[0] * t * SLIDE_DISTANCE,
+                        tr.ndc[1] * t * SLIDE_DISTANCE,
+                        -SLIDE_DISTANCE,
+                    );
+                    pushLine(onTop, P, pj.pos, rayColor);
+                    if (behind) pushLine(onTop, pj.pos, hit, rayColor);
+                    const s = 0.35;
+                    for (const d of [
+                        [s, 0, 0],
+                        [0, s, 0],
+                        [0, 0, s],
+                    ])
+                        pushLine(onTop, v3.sub(P, d), v3.add(P, d), [1, 1, 1, 1]);
+                    const h = 0.06;
+                    for (const d of [
+                        [h, 0, 0],
+                        [0, h, 0],
+                        [0, 0, h],
+                    ])
+                        pushLine(onTop, v3.sub(hit, d), v3.add(hit, d), [1, 1, 1, 1]);
+                }
+                drawLines(lines, viewProj, true);
+                if (state.frustum) {
+                    const slide = [
+                        [-1, -1],
+                        [1, -1],
+                        [1, 1],
+                        [-1, 1],
+                    ].map(([x, y]) =>
+                        L(x * t * SLIDE_DISTANCE, y * t * SLIDE_DISTANCE, -SLIDE_DISTANCE),
+                    );
+                    drawQuad(slide, slideUVs(), viewProj, 0.92, false);
+                }
+                drawLines(onTop, viewProj, false);
+            }
+
+            function drawInset(pj, tr) {
+                gl.enable(gl.SCISSOR_TEST);
+                gl.viewport(inset.x, inset.y, inset.s, inset.s);
+                gl.scissor(inset.x, inset.y, inset.s, inset.s);
+                gl.clearColor(0.05, 0.05, 0.06, 1);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                const viewProj = M4.mul(pj.proj, pj.view);
+                drawScene(viewProj, pj);
+                const ndcQuad = [
+                    [-1, -1, 0],
+                    [1, -1, 0],
+                    [1, 1, 0],
+                    [-1, 1, 0],
+                ];
+                if (state.overlay) {
+                    gl.disable(gl.DEPTH_TEST);
+                    drawQuad(ndcQuad, slideUVs(), M4.ident(), 0.35, true);
+                    gl.enable(gl.DEPTH_TEST);
+                }
+                const frame = [];
+                for (let i = 0; i < 4; i++)
+                    pushLine(frame, ndcQuad[i], ndcQuad[(i + 1) % 4], [1, 0.82, 0.25, 1]);
+                if (tr && !tr.behind) {
+                    const [x, y] = tr.ndc,
+                        s = 0.06;
+                    pushLine(frame, [x - s, y, 0], [x + s, y, 0], [1, 1, 1, 1]);
+                    pushLine(frame, [x, y - s, 0], [x, y + s, 0], [1, 1, 1, 1]);
+                }
+                drawLines(frame, M4.ident(), false);
+                gl.disable(gl.SCISSOR_TEST);
+            }
+
+            let animStart = performance.now();
+            function frame(now) {
+                if (state.animate) {
+                    state.yaw = wrapDegrees(
+                        animBaseYaw + 28 * Math.sin(((now - animStart) / 1000) * 0.8),
+                    );
+                    document.getElementById("yaw").value = state.yaw;
+                    document.getElementById("yawOut").textContent = `${state.yaw.toFixed(0)}°`;
+                }
+                const pj = projector();
+                if (!hovered && !pinned) hovered = castRay(pj.pos, pj.forward);
+                const point = pinned || hovered;
+                const tr = point ? trace(point, pj) : null;
+
+                gl.viewport(0, 0, W, H);
+                gl.clearColor(0.08, 0.09, 0.1, 1);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                const camera = cameraMatrices(W / H);
+                drawScene(camera.viewProj, pj);
+                drawProjectorGizmo(camera.viewProj, pj, tr);
+                if (state.inset) drawInset(pj, tr);
+
+                updatePanel(pj, tr);
+                drawDiagram(pj, tr);
+                requestAnimationFrame(frame);
+            }
+
+            resize();
+            goToStep(0);
+            requestAnimationFrame(frame);
+        </script>
+    </body>
+</html>
